@@ -1,0 +1,23 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/kevin/once_again/install/gen3_control/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/kevin/once_again/src/gen3_control/include/**",
+        "/usr/include/**",
+        "${workspaceFolder}/src/gen3_control/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
