@@ -9,6 +9,8 @@
 #include "pinocchio/algorithm/jacobian.hpp"
 //Eigen
 #include <Eigen/Dense>
+//CPP libs
+#include <cmath>
 
 class robot_util
 {
@@ -21,9 +23,11 @@ private:
     
     const std::string end_effector_name = "end_effector_link";
     //InvKin constants
-    const double eps  = 1e-4;
+    // const double eps  = 1e-4;
+    const double eps  = 3e-3;
     const int IT_MAX  = 1000;
-    const double DT   = 1e-1;
+    // const double DT   = 1e-1;
+    const double DT   = 10e-1;
     const double damp = 1e-6;
         
 public:
@@ -38,8 +42,12 @@ public:
 
     void updateEEPose(Eigen::VectorXd q);
     Eigen::VectorXd getFullQ(Eigen::VectorXd q);
+    Eigen::VectorXd getQFromFullQ(Eigen::VectorXd full_q);
     Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::VectorXd endPos,Eigen::VectorXd startSpeed,double endTime);
+    Eigen::MatrixXd createTrajectory(Eigen::VectorXd start_position,Eigen::VectorXd end_position,Eigen::VectorXd start_speed,double soft_joint_speed_limit);
     bool inverseKinematics(Eigen::Vector3d position,Eigen::Quaterniond orientation);
+    Eigen::VectorXd radiansToDegrees(Eigen::VectorXd vec);
+    Eigen::VectorXd degreesToRadians(Eigen::VectorXd vec);
 };
 
 //inverse kin current_ee_orientation

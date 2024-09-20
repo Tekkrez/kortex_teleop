@@ -121,13 +121,23 @@ bool kortex_robot::getFeedback()
     }
 
     base_feedback = base_cyclic->RefreshFeedback();
-    for(int i=0; i<q.size();i++){
+    for(int i=0; i<q.size();i++)
+    {
         q(i) = base_feedback.actuators(i).position();
-        q_dot(i) = base_feedback.actuators(i).position();
+        q_dot(i) = base_feedback.actuators(i).velocity();
     }
-    return true;
+    return true;    
 }
 
+//Checks feedback if it is being updated by other functions like sendPosition
+void kortex_robot::checkFeedback()
+{
+    for(int i=0; i<q.size();i++)
+    {
+        q(i) = base_feedback.actuators(i).position();
+        q_dot(i) = base_feedback.actuators(i).velocity();
+    }
+}
 //Initializes base_command. Calls getFeedback() first
 bool kortex_robot::setBaseCommand()
 {

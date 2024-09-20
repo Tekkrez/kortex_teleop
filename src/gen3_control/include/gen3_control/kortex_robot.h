@@ -42,8 +42,9 @@ private:
     k_api::Base::ServoingModeInformation servoing_mode;
     bool low_level_servoing = false;
 public:
-
+    //Degrees
     Eigen::VectorXd q;
+    //Degrees
     Eigen::VectorXd q_dot;
     kortex_robot();
     ~kortex_robot();
@@ -54,6 +55,7 @@ public:
     void setLowLevelServoing();
     void setSingleLevelServoing();
     bool getFeedback();
+    void checkFeedback();
 
     bool sendPosition(const Eigen::VectorXd& desired_q_step);
     bool setBaseCommand();
