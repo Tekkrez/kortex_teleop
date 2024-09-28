@@ -14,12 +14,15 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(pinocchio REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
 
 add_executable(gen3_control src/gen3_control.cpp src/kortex_robot.cpp src/robot_util.cpp)
 
 ament_target_dependencies(gen3_control PUBLIC
   rclcpp
   Eigen3
+  sensor_msgs
   )
 
 target_link_libraries(gen3_control PUBLIC
