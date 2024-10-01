@@ -1,6 +1,7 @@
 #include "robot_util.h"
 
 //Finds coefficients for a cubic function. End speed is set to be 0
+//TODO: Add ability for circular interpolation b/w 0/360 deg
 Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::VectorXd endPos,Eigen::VectorXd startSpeed,double endTime){
   Eigen::Matrix<double,4,4> timeMatrix;
   timeMatrix(0,Eigen::all) <<  1,0,0,0;
@@ -24,7 +25,7 @@ Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::Vect
 
 //Create cubic smooth trajectory using start and position for each of the joints
 //Soft speed limit is used to determine time to complete trajectory
-Eigen::MatrixXd createTrajectory(Eigen::VectorXd start_position,Eigen::VectorXd end_position,Eigen::VectorXd start_speed,double soft_joint_speed_limit,double time_step)
+Eigen::MatrixXd createTrajectory(Eigen::VectorXd start_position, Eigen::VectorXd end_position, Eigen::VectorXd start_speed, double soft_joint_speed_limit, double time_step)
 {
   //Find Coefficients scaled by soft joint speed limit
   Eigen::VectorXd diff = end_position-start_position;
@@ -60,4 +61,13 @@ Eigen::VectorXd degreesToRadians(Eigen::VectorXd vec)
   return vec*M_PI/180;
 }
 
-//Does radians to degrees conversion and applies mod operation
+Eigen::VectorXd vectorFMod(Eigen::VectorXd vec)
+{
+  Eigen::VectorXd retVec(7);
+  for(int i=0; i<vec.size(); i++)
+  {
+    retVec(i) = fmod(vec(i),2*M_PI);
+  }
+  return retVec;
+}
+

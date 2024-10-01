@@ -6,8 +6,11 @@ manipulator:
   mode: global
   position_scale: 1.0
   rotation_scale: 0.5
-  position_threshold: 0.001
+  position_threshold: 0.005
   orientation_threshold: 0.01
-  cost_threshold: 0.05
-  minimal_displacement_weight: 0.001
+  # was 0.05 before
+  cost_threshold: 0.005
+  minimal_displacement_weight: 0.005
+  center_joints_weight: 0.001
+
   

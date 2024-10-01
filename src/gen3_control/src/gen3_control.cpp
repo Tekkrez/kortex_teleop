@@ -140,9 +140,10 @@ int main(int argc, char** argv)
       // // std::cout<<"Desired Joint position: " << joint_pos_traj.row(i) << std::endl;
 
       // // std::cout<<"EE position: " << gen3_util.current_ee_position.transpose()<<"\n" << std::endl;
-      auto time_point1 = chrono::high_resolution_clock::now();
+      // auto time_point1 = chrono::high_resolution_clock::now();
 
       auto message = sensor_msgs::msg::JointState();
+      message.header.stamp = gen3_control_node->now();
       std::vector<double> position_vec;
       std::vector<double> velocity_vec;
       position_vec.resize(gen3_robot.q.size());
@@ -155,8 +156,8 @@ int main(int argc, char** argv)
       message.velocity = velocity_vec;
       //Publish
       joint_pub->publish(message);
-      auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(chrono::high_resolution_clock::now()-time_point1);
-      std::cout << "Publish time cost in ns " << elapsed.count() << std::endl;
+      // auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(chrono::high_resolution_clock::now()-time_point1);
+      // std::cout << "Current q: " << degreesToRadians(gen3_robot.q).transpose() << std::endl;
     }
     
     loop_rate.sleep(); 
