@@ -11,6 +11,4 @@ manipulator:
   # was 0.05 before
   cost_threshold: 0.005
   minimal_displacement_weight: 0.005
-  center_joints_weight: 0.001
-
-  
+  # center_joints_weight: 0.001

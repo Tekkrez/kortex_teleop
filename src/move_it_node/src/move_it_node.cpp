@@ -9,6 +9,7 @@
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <visualization_msgs/msg/marker.hpp>
+#include <trajectory_msgs/msg/joint_trajectory.hpp>
 // Util
 #include <robot_util.h>
 #include <chrono>
@@ -16,6 +17,9 @@ using std::placeholders::_1;
 
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("moveit_traj_node");
 
+//Joint names
+std::vector<std::string> joint_names = { "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7" };
+std::vector<int> continuous_joints = {0,2,4,6};
 Eigen::VectorXd latest_q(7);
 Eigen::VectorXd latest_q_dot(7);
 
@@ -25,9 +29,14 @@ std::vector<double> velocities;
 std::vector<double> desired_state;
 Eigen::VectorXd desired_q(7);
 
+//Params
+double soft_joint_speed_limit = 0.6;
+double time_step = 0.1;
+
 // Flags
 bool new_joint_state = false;
 bool traj_gen_needed = false;
+bool doOnce = true;
 
 void jointState_Callback(const sensor_msgs::msg::JointState& msg)
 {
@@ -37,6 +46,47 @@ void jointState_Callback(const sensor_msgs::msg::JointState& msg)
     std::copy(positions.begin(),positions.end(),latest_q.data());
     std::copy(velocities.begin(),velocities.end(),latest_q_dot.data());
     new_joint_state = true;
+}
+
+Eigen::VectorXd targetAdjustmentContinuousJoints(Eigen::VectorXd& currentPos, Eigen::VectorXd& targetPos)
+{
+    Eigen::VectorXd adjustedTarget = targetPos;
+    Eigen::VectorXd diff = targetPos-currentPos;
+    std::cout << "Diff: " << diff.transpose() << std::endl;
+    for(int i : continuous_joints)
+    {
+        if(abs(diff(i))>M_PI)
+        {
+            if(diff(i)<0)
+            {
+                adjustedTarget(i)=adjustedTarget(i) + 2*M_PI;
+            }
+            else
+            {
+                adjustedTarget(i)= adjustedTarget(i) - 2*M_PI;
+            }
+        }
+    }
+    std::cout << "Adjusted Target: " << adjustedTarget.transpose() << std::endl;
+    return adjustedTarget;
+}
+
+trajectory_msgs::msg::JointTrajectoryPoint fillJointTrajectoryPoint(Eigen::VectorXd positions,double timeVal)
+{
+  //Convert from Eigen vec to std vec
+  std::vector<double> position_vec;
+  position_vec.resize(positions.size());
+  Eigen::VectorXd::Map(&position_vec[0],position_vec.size()) = positions;
+  //Get time to complete
+  int32_t seconds = (int32_t)(timeVal);
+  int32_t nanoseconds = (int32_t)((timeVal-seconds)*1e9);
+  rclcpp::Duration waypoint_time(seconds,nanoseconds);
+  //Fill in joint traj point
+  trajectory_msgs::msg::JointTrajectoryPoint waypoint;
+  waypoint.positions = position_vec;
+  waypoint.time_from_start = waypoint_time;
+
+  return waypoint;
 }
 
 
@@ -54,10 +104,15 @@ int main(int argc,char** argv)
     //Rviz2 marker pub
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub;
     marker_pub = traj_pub_node->create_publisher<visualization_msgs::msg::Marker>("visualization_marker",1);
+    //Joint trajectory pub
+    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr joint_traj_pub;
+    joint_traj_pub = traj_pub_node->create_publisher<trajectory_msgs::msg::JointTrajectory>("joint_trajectory",1);
+
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(traj_pub_node);
     std::thread([&executor]() { executor.spin(); }).detach();
 
+    //Load move it stuff
     robot_model_loader::RobotModelLoader robot_model_loader(traj_pub_node, "robot_description");
     const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
     planning_scene::PlanningScene planning_scene(kinematic_model);
@@ -78,11 +133,12 @@ int main(int argc,char** argv)
     box_pose.orientation.w = 1.0;
     box_pose.position.x = 0.8;
     box_pose.position.y = -0.3;
-    box_pose.position.z = -0.1;
+    box_pose.position.z = -0.14;//3 cm extra offset since robot is sitting on two plates
     collision_object.primitives.push_back(primitive);
     collision_object.primitive_poses.push_back(box_pose);
     collision_object.operation = collision_object.ADD;
 
+    //rviz vizualization
     visualization_msgs::msg::Marker box;
     box.header.frame_id = collision_object.header.frame_id;
     box.header.stamp = traj_pub_node->now();
@@ -99,16 +155,17 @@ int main(int argc,char** argv)
     box.color.a = 1.0;
     marker_pub->publish(box);
 
+    //Add collision object to planning scecne
     if(!planning_scene.processCollisionObjectMsg(collision_object))
     {
         RCLCPP_WARN_STREAM(LOGGER, "Object not able to be added"<<"\n");
     }
 
+    //Variables for collision detection
     collision_detection::CollisionRequest collision_request;
     collision_detection::CollisionResult collision_result;
-
     collision_request.contacts = true;
-    collision_request.max_contacts = 1000;
+    collision_request.max_contacts = 10;
 
     const std::string PLANNING_GROUP = "manipulator";
     moveit::core::RobotState& current_state = planning_scene.getCurrentStateNonConst();
@@ -127,8 +184,8 @@ int main(int argc,char** argv)
     while(rclcpp::ok())
     {
         //TODO: Add error magnitude checking. Should only work if the last generated solution is collision
-        if(new_joint_state)
-        {   
+        if(new_joint_state && doOnce)
+        {   doOnce = false;
             //Reset flag
             new_joint_state=false;
             //Update current Joint State
@@ -157,9 +214,13 @@ int main(int argc,char** argv)
                     RCLCPP_INFO(LOGGER, "Contact between: %s and %s", it->first.first.c_str(), it->first.second.c_str());
                 }
             }
-            std::copy(desired_state.begin(), desired_state.end(), desired_q.data());
+            else
+            {
+                std::copy(desired_state.begin(), desired_state.end(), desired_q.data());
+                traj_gen_needed = true;
+            }
             // desired_q = vectorFMod(desired_q);
-            // RCLCPP_INFO_STREAM(LOGGER,"Target_position: \n" << desired_q.transpose() << "\n");
+            RCLCPP_INFO_STREAM(LOGGER,"Target_position: " << desired_q.transpose() << "\n");
             // Eigen::Isometry3d end_effector_state = current_state.getGlobalLinkTransform("half_arm_2_link");
             // RCLCPP_INFO_STREAM(LOGGER,"Translation: \n" << end_effector_state.translation()<<"\n");
             // RCLCPP_INFO_STREAM(LOGGER,"Rotation: \n" << end_effector_state.rotation()<<"\n");
@@ -169,7 +230,54 @@ int main(int argc,char** argv)
             {
                 //Reset flag
                 traj_gen_needed = false;
+                Eigen::Matrix <double,4,7> cubicFunc;
+                Eigen::VectorXd adjusted_target = targetAdjustmentContinuousJoints(latest_q,desired_q);
+                Eigen::VectorXd diff = adjusted_target-latest_q;
+                double completion_time = diff.cwiseAbs().maxCoeff()/soft_joint_speed_limit;
+                completion_time = round(completion_time/time_step)*time_step;
+                cubicFunc = findCubicFunction(latest_q, desired_q, latest_q_dot, completion_time);
+                Eigen::VectorXd time_slices = Eigen::VectorXd::LinSpaced(completion_time/time_step,time_step,completion_time);
+                //Create Trajectory
+                trajectory_msgs::msg::JointTrajectory joint_traj;
+                joint_traj.joint_names = joint_names;
+                joint_traj.points.resize(time_slices.size());
+                for (int i=0; i<time_slices.size();i++)
+                {
+                    Eigen::Matrix<double,1,4> time_matrix;
+                    time_matrix <<  1,time_slices(i),pow(time_slices(i),2),pow(time_slices(i),3);
+                    //Desired Joint vales at time slice
+                    Eigen::Matrix<double,1,7> result;
+                    result = time_matrix*cubicFunc;
+                    //Check collision
+                    RCLCPP_INFO_STREAM(LOGGER, "Waypoint: "<< i <<" at Position: " << result << "\n");
+
+                    potential_state.setJointGroupPositions(joint_model_group,result);
+                    collision_result.clear();
+                    planning_scene.checkCollision(collision_request, collision_result, potential_state);
+                    if(collision_result.collision)
+                    {
+                        RCLCPP_WARN_STREAM(LOGGER, "The robot IK trajectory would result in a collision"<<"\n");
+                        collision_detection::CollisionResult::ContactMap::const_iterator it;
+                        for (it = collision_result.contacts.begin(); it != collision_result.contacts.end(); ++it)
+                        {
+                            RCLCPP_INFO(LOGGER, "Contact between: %s and %s", it->first.first.c_str(), it->first.second.c_str());
+                        }
+                        break;
+                    }
+                    else
+                    {
+                        joint_traj.points[i] = fillJointTrajectoryPoint(result,time_slices(i));
+                    }
+                }
+                if(!collision_result.collision)
+                {
+                    //pub joint_trajectory
+                    joint_traj_pub->publish(joint_traj);
+
+                }
+
                 
+
             }
         }
     }

@@ -10,10 +10,13 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 
 add_executable(moveit_node src/move_it_node.cpp src/robot_util.cpp)
 
-ament_target_dependencies(moveit_node rclcpp moveit_ros_planning_interface pluginlib sensor_msgs)
+ament_target_dependencies(moveit_node rclcpp moveit_ros_planning_interface pluginlib sensor_msgs geometry_msgs visualization_msgs trajectory_msgs)
 
 target_include_directories(moveit_node
   PUBLIC
