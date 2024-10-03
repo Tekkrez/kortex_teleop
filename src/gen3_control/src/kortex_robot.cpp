@@ -171,9 +171,9 @@ bool kortex_robot::sendPosition(const Eigen::VectorXd& desired_q_step)
             base_command.set_frame_id(0);
         }
         //Set new desired position and id for new command
-        for(int i =0;i<q.size();i++)
+        for(int i =0; i<q.size(); i++)
         {
-            base_command.mutable_actuators(i)->set_position(desired_q_step(i));
+            base_command.mutable_actuators(i)->set_position(fmod(desired_q_step(i),360.0));
             base_command.mutable_actuators(i)->set_command_id(base_command.frame_id());
         }
         base_feedback = base_cyclic->Refresh(base_command,0);

@@ -30,7 +30,7 @@ std::vector<double> desired_state;
 Eigen::VectorXd desired_q(7);
 
 //Params
-double soft_joint_speed_limit = 0.6;
+double soft_joint_speed_limit = 30; //deg/sec
 double time_step = 0.1;
 
 // Flags
@@ -231,11 +231,13 @@ int main(int argc,char** argv)
                 //Reset flag
                 traj_gen_needed = false;
                 Eigen::Matrix <double,4,7> cubicFunc;
-                Eigen::VectorXd adjusted_target = targetAdjustmentContinuousJoints(latest_q,desired_q);
+                Eigen::VectorXd adjusted_target = radiansToDegrees(targetAdjustmentContinuousJoints(latest_q,desired_q));
+                Eigen::VectorXd current_pos_deg = radiansToDegrees(latest_q);
+                Eigen::VectorXd current_vel_deg = radiansToDegrees(latest_q_dot);
                 Eigen::VectorXd diff = adjusted_target-latest_q;
                 double completion_time = diff.cwiseAbs().maxCoeff()/soft_joint_speed_limit;
                 completion_time = round(completion_time/time_step)*time_step;
-                cubicFunc = findCubicFunction(latest_q, desired_q, latest_q_dot, completion_time);
+                cubicFunc = findCubicFunction(current_pos_deg, adjusted_target, current_vel_deg, completion_time);
                 Eigen::VectorXd time_slices = Eigen::VectorXd::LinSpaced(completion_time/time_step,time_step,completion_time);
                 //Create Trajectory
                 trajectory_msgs::msg::JointTrajectory joint_traj;
@@ -260,8 +262,9 @@ int main(int argc,char** argv)
                         collision_detection::CollisionResult::ContactMap::const_iterator it;
                         for (it = collision_result.contacts.begin(); it != collision_result.contacts.end(); ++it)
                         {
-                            RCLCPP_INFO(LOGGER, "Contact between: %s and %s", it->first.first.c_str(), it->first.second.c_str());
+                            RCLCPP_INFO(LOGGER, "Contact between: %s and %s at time slice %d", it->first.first.c_str(), it->first.second.c_str(),i+1);
                         }
+                        joint_traj.points.resize(i);
                         break;
                     }
                     else
@@ -269,15 +272,16 @@ int main(int argc,char** argv)
                         joint_traj.points[i] = fillJointTrajectoryPoint(result,time_slices(i));
                     }
                 }
-                if(!collision_result.collision)
-                {
-                    //pub joint_trajectory
-                    joint_traj_pub->publish(joint_traj);
+                //TODO: Add this back later
+                // if(!collision_result.collision)
+                // {
+                //     //pub joint_trajectory
+                //     joint_traj_pub->publish(joint_traj);
 
-                }
+                // }
 
-                
-
+                //pub joint_trajectory
+                joint_traj_pub->publish(joint_traj);
             }
         }
     }

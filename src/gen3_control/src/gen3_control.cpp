@@ -4,9 +4,38 @@
 #include <math.h>
 #include <chrono>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <trajectory_msgs/msg/joint_trajectory.hpp>
 
-static const rclcpp::Logger LOGGER = rclcpp::get_logger("motion_control_node");
+static const rclcpp::Logger LOGGER = rclcpp::get_logger("gen3_control_node");
 std::vector<std::string> joint_names = { "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7" };
+//Loop rate var
+int rate = 1100;
+//Variables for trajectory tracking
+int waypoint_position = 0;
+int waypoint_end = 0;
+trajectory_msgs::msg::JointTrajectory trajectory;
+bool new_trajectory = false;
+bool trajectory_ready = false;
+bool waypoint_reached = true;
+double waypoint_interval = 0;
+Eigen::Matrix<double,1,7> next_joint_step;
+
+Eigen::VectorXd time_slices;
+int time_slice_position = 0;
+int time_slice_end = 0;
+Eigen::Matrix<double,4,7> cubicFunc;
+
+void traj_callback(const trajectory_msgs::msg::JointTrajectory& msg){
+  trajectory = msg;
+  waypoint_end = msg.points.size();
+  rclcpp::Duration time_to_first_point(msg.points[0].time_from_start.sec,msg.points[0].time_from_start.nanosec);
+  waypoint_interval = time_to_first_point.seconds();
+  time_slices = Eigen::VectorXd::LinSpaced(waypoint_interval*rate, 1/static_cast<double>(rate), waypoint_interval);
+  // std::cout<< "Time slices: " << time_slices.transpose() << std::endl;
+  time_slice_end = time_slices.size()-1;
+  new_trajectory = true;
+  trajectory_ready = true;
+}
 
 int main(int argc, char** argv)
 {
@@ -23,7 +52,10 @@ int main(int argc, char** argv)
   pub_qos.best_effort();
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_pub;
   joint_pub = gen3_control_node->create_publisher<sensor_msgs::msg::JointState>("joint_states",pub_qos);
-
+  //Trajectory sub
+  rclcpp::QoS sub_qos(1);
+  rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr traj_sub;
+  traj_sub = gen3_control_node->create_subscription<trajectory_msgs::msg::JointTrajectory>("joint_trajectory",sub_qos,traj_callback);
   //Robot stuff
   // robot_util gen3_util("/home/kevin/kortex_teleop/install/gen3_control/share/gen3_control/config/gen3_7dof_with_gripper.urdf");
   
@@ -70,9 +102,9 @@ int main(int argc, char** argv)
 
   // gen3_robot.setLowLevelServoing();
 
-  rclcpp::Rate loop_rate(1100);
-  auto time_point1 = chrono::high_resolution_clock::now();
-  auto time_point2 = chrono::high_resolution_clock::now();
+  rclcpp::Rate loop_rate(rate);
+  // auto time_point1 = chrono::high_resolution_clock::now();
+  // auto time_point2 = chrono::high_resolution_clock::now();
   // for(int i=1; i<joint_pos_traj.rows();i++)
   // {
   //   time_point = chrono::high_resolution_clock::now();
@@ -126,19 +158,70 @@ int main(int argc, char** argv)
   while(rclcpp::ok())
   {
     i++;
-    if(!gen3_robot.getFeedback())
+    //Check for new message
+    if(new_trajectory)
     {
-      std::cout<<"Get feedback error " << std::endl;
-      break;
+    //   RCLCPP_WARN_STREAM(LOGGER, "Here 1"<<"\n");
+      new_trajectory=false;
+      waypoint_position = 0;
+      waypoint_reached = true;
+    }
+    //Find new cubic function to waypoint
+    if(trajectory_ready && waypoint_reached)
+    {
+      //check if end of waypoints is reached
+      if(waypoint_position == waypoint_end)
+      {
+        trajectory_ready = false;
+      }
+      else//get function to waypoint
+      {
+        Eigen::VectorXd target_pos(7);
+        std::copy(trajectory.points[waypoint_position].positions.begin(),trajectory.points[waypoint_position].positions.end(),target_pos.data());
+        cubicFunc = findCubicFunction(gen3_robot.q,target_pos,gen3_robot.q_dot,waypoint_interval);
+        waypoint_reached = false;
+        time_slice_position = 0;
+        waypoint_position++;
+        std::cout << "Waypoint position: " << waypoint_position << "/" << waypoint_end << std::endl;
+        std::cout << "Current pos: " << gen3_robot.q.transpose() << "\nCurrent target: " << target_pos.transpose() << "\n Cubic func: "<< cubicFunc.transpose()<<std::endl;
+      }
+    }
+    //Get next joint position for timestep
+    if(trajectory_ready && !waypoint_reached)
+    {
+      Eigen::Matrix<double,1,4> time_matrix;
+      time_matrix <<  1,time_slices(time_slice_position),pow(time_slices(time_slice_position),2),pow(time_slices(time_slice_position),3);
+      //Desired Joint vales at time slice
+      next_joint_step = time_matrix*cubicFunc;
+      //Send joint step
+      // if(!gen3_robot.sendPosition(next_joint_step.transpose()))
+      //   {
+      //     std::cout<<"Send position error!!"<< std::endl;
+      //     break;
+      //   }
+      //Check if end of time slice
+      time_slice_position++;
+      if(time_slice_position == time_slice_end)
+      {
+        waypoint_reached = true;
+      }
+    }
+    else
+    {
+      if(!gen3_robot.getFeedback())
+      {
+        std::cout<<"Get feedback error " << std::endl;
+        break;
+      }
     }
 
     if(!(i%100))
     {
-      // gen3_robot.checkFeedback();
+      gen3_robot.checkFeedback();
       // gen3_util.updateEEPose(gen3_robot.q);
       // // std::cout<<"Step: "<< i <<" - sleep time: "<< elapsed.count() <<" - run time: "<< runTime.count()  <<" - Joint Positions: " << gen3_robot.q.transpose() << std::endl;
-      // // std::cout<<"Desired Joint position: " << joint_pos_traj.row(i) << std::endl;
-
+      std::cout<<"Desired Joint position: " << next_joint_step << std::endl;
+      std::cout <<"Current joint position: " << gen3_robot.q << std::endl;
       // // std::cout<<"EE position: " << gen3_util.current_ee_position.transpose()<<"\n" << std::endl;
       // auto time_point1 = chrono::high_resolution_clock::now();
 
