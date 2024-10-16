@@ -22,6 +22,28 @@ Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::Vect
   return coeffs;
 }
 
+//Finds coefficients for a cubic function
+Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::VectorXd endPos,Eigen::VectorXd startSpeed,Eigen::VectorXd endSpeed,double endTime){
+  Eigen::Matrix<double,4,4> timeMatrix;
+  timeMatrix(0,Eigen::all) <<  1,0,0,0;
+  timeMatrix(1,Eigen::all) <<  0,1,0,0;
+  timeMatrix(2,Eigen::all) <<  1,endTime,pow(endTime,2),pow(endTime,3);
+  timeMatrix(3,Eigen::all) <<  0,1,2*endTime,3*pow(endTime,2);
+
+  Eigen::Matrix<double,4,7> target;
+  target.row(0) = startPos;
+  target.row(1) = startSpeed;
+  target.row(2) = endPos;
+  target.row(3) = endSpeed;
+  // std::cout<<"Target: " <<target<<std::endl;
+
+  Eigen::Matrix<double,4,7> coeffs;
+  coeffs = timeMatrix.colPivHouseholderQr().solve(target);
+  // std::cout<<"Solution: " <<coeffs<<std::endl;
+
+  return coeffs;
+}
+
 //Create cubic smooth trajectory using start and position for each of the joints
 //Soft speed limit is used to determine time to complete trajectory
 Eigen::MatrixXd createTrajectory(Eigen::VectorXd start_position,Eigen::VectorXd end_position,Eigen::VectorXd start_speed,double soft_joint_speed_limit,double time_step)

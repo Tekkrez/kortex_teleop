@@ -20,17 +20,16 @@ static const rclcpp::Logger LOGGER = rclcpp::get_logger("moveit_traj_node");
 //Joint names
 std::vector<std::string> joint_names = { "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7" };
 std::vector<int> continuous_joints = {0,2,4,6};
+std::vector<int> non_continuous_joints = {1,3,5};
 Eigen::VectorXd latest_q(7);
 Eigen::VectorXd latest_q_dot(7);
 
-std::vector<double> positions;
-std::vector<double> velocities;
 
 std::vector<double> desired_state;
 Eigen::VectorXd desired_q(7);
 
 //Params
-double soft_joint_speed_limit = 30; //deg/sec
+double soft_joint_speed_limit = 0.2; //rad/sec
 double time_step = 0.1;
 
 // Flags
@@ -40,6 +39,9 @@ bool doOnce = true;
 
 void jointState_Callback(const sensor_msgs::msg::JointState& msg)
 {
+    std::vector<double> positions;
+    std::vector<double> velocities;
+
     positions = msg.position;
     velocities = msg.velocity;
 
@@ -57,13 +59,15 @@ Eigen::VectorXd targetAdjustmentContinuousJoints(Eigen::VectorXd& currentPos, Ei
     {
         if(abs(diff(i))>M_PI)
         {
+            RCLCPP_WARN_STREAM(LOGGER, "Large desired diff in continuous joint. Look at Joint: "<<i+1<<"\n");
+
             if(diff(i)<0)
             {
-                adjustedTarget(i)=adjustedTarget(i) + 2*M_PI;
+                adjustedTarget(i) = adjustedTarget(i) + 2*M_PI;
             }
             else
             {
-                adjustedTarget(i)= adjustedTarget(i) - 2*M_PI;
+                adjustedTarget(i) = adjustedTarget(i) - 2*M_PI;
             }
         }
     }
@@ -71,12 +75,15 @@ Eigen::VectorXd targetAdjustmentContinuousJoints(Eigen::VectorXd& currentPos, Ei
     return adjustedTarget;
 }
 
-trajectory_msgs::msg::JointTrajectoryPoint fillJointTrajectoryPoint(Eigen::VectorXd positions,double timeVal)
+trajectory_msgs::msg::JointTrajectoryPoint fillJointTrajectoryPoint(Eigen::VectorXd positions, Eigen::VectorXd velocities, double timeVal)
 {
   //Convert from Eigen vec to std vec
   std::vector<double> position_vec;
   position_vec.resize(positions.size());
+  std::vector<double> velocity_vec;
+  velocity_vec.resize(velocities.size());
   Eigen::VectorXd::Map(&position_vec[0],position_vec.size()) = positions;
+  Eigen::VectorXd::Map(&velocity_vec[0],velocity_vec.size()) = velocities;
   //Get time to complete
   int32_t seconds = (int32_t)(timeVal);
   int32_t nanoseconds = (int32_t)((timeVal-seconds)*1e9);
@@ -84,6 +91,7 @@ trajectory_msgs::msg::JointTrajectoryPoint fillJointTrajectoryPoint(Eigen::Vecto
   //Fill in joint traj point
   trajectory_msgs::msg::JointTrajectoryPoint waypoint;
   waypoint.positions = position_vec;
+  waypoint.velocities = velocity_vec;
   waypoint.time_from_start = waypoint_time;
 
   return waypoint;
@@ -176,7 +184,7 @@ int main(int argc,char** argv)
     geometry_msgs::msg::Pose target_pose;
     target_pose.orientation.w = 1.0;
     target_pose.position.x = 0.3;
-    target_pose.position.y = 0.3;
+    target_pose.position.y = -0.3;
     target_pose.position.z = 0.7;
 
     auto time_point1 = std::chrono::high_resolution_clock::now();
@@ -189,7 +197,7 @@ int main(int argc,char** argv)
             //Reset flag
             new_joint_state=false;
             //Update current Joint State
-            current_state.setJointGroupPositions(joint_model_group,positions);
+            current_state.setJointGroupPositions(joint_model_group,latest_q);
             if(!current_state.setFromIK(joint_model_group,target_pose,"end_effector_link",0.0))
             {
                 RCLCPP_WARN_STREAM(LOGGER, "IK not found"<<"\n");
@@ -231,13 +239,14 @@ int main(int argc,char** argv)
                 //Reset flag
                 traj_gen_needed = false;
                 Eigen::Matrix <double,4,7> cubicFunc;
-                Eigen::VectorXd adjusted_target = radiansToDegrees(targetAdjustmentContinuousJoints(latest_q,desired_q));
-                Eigen::VectorXd current_pos_deg = radiansToDegrees(latest_q);
-                Eigen::VectorXd current_vel_deg = radiansToDegrees(latest_q_dot);
+                Eigen::VectorXd adjusted_target = targetAdjustmentContinuousJoints(latest_q,desired_q);
                 Eigen::VectorXd diff = adjusted_target-latest_q;
                 double completion_time = diff.cwiseAbs().maxCoeff()/soft_joint_speed_limit;
                 completion_time = round(completion_time/time_step)*time_step;
-                cubicFunc = findCubicFunction(current_pos_deg, adjusted_target, current_vel_deg, completion_time);
+                cubicFunc = findCubicFunction(latest_q, adjusted_target, latest_q_dot, completion_time);
+                RCLCPP_INFO_STREAM(LOGGER, "Cubic Function:\n" << cubicFunc << "\n");
+
+                //TODO: Add checking for max time_slice required
                 Eigen::VectorXd time_slices = Eigen::VectorXd::LinSpaced(completion_time/time_step,time_step,completion_time);
                 //Create Trajectory
                 trajectory_msgs::msg::JointTrajectory joint_traj;
@@ -245,15 +254,17 @@ int main(int argc,char** argv)
                 joint_traj.points.resize(time_slices.size());
                 for (int i=0; i<time_slices.size();i++)
                 {
-                    Eigen::Matrix<double,1,4> time_matrix;
-                    time_matrix <<  1,time_slices(i),pow(time_slices(i),2),pow(time_slices(i),3);
+                    Eigen::Matrix<double,2,4> time_matrix;
+                    time_matrix.row(0) <<  1,time_slices(i),pow(time_slices(i),2),pow(time_slices(i),3);
+                    time_matrix.row(1) <<  0,1,2*time_slices(i),3*pow(time_slices(i),2);
+
                     //Desired Joint vales at time slice
-                    Eigen::Matrix<double,1,7> result;
+                    Eigen::Matrix<double,2,7> result;
                     result = time_matrix*cubicFunc;
                     //Check collision
                     RCLCPP_INFO_STREAM(LOGGER, "Waypoint: "<< i <<" at Position: " << result << "\n");
 
-                    potential_state.setJointGroupPositions(joint_model_group,result);
+                    potential_state.setJointGroupPositions(joint_model_group,result.row(0));
                     collision_result.clear();
                     planning_scene.checkCollision(collision_request, collision_result, potential_state);
                     if(collision_result.collision)
@@ -269,7 +280,7 @@ int main(int argc,char** argv)
                     }
                     else
                     {
-                        joint_traj.points[i] = fillJointTrajectoryPoint(result,time_slices(i));
+                        joint_traj.points[i] = fillJointTrajectoryPoint(result.row(0),result.row(1),time_slices(i));
                     }
                 }
                 //TODO: Add this back later

@@ -47,6 +47,8 @@ public:
     Eigen::VectorXd q;
     //Degrees
     Eigen::VectorXd q_dot;
+    std::vector<int> continuous_joints = {0,2,4,6};
+    std::vector<int> non_continuous_joints = {1,3,5};
     kortex_robot();
     ~kortex_robot();
     

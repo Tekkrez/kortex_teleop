@@ -177,13 +177,26 @@ int main(int argc, char** argv)
       else//get function to waypoint
       {
         Eigen::VectorXd target_pos(7);
+        Eigen::VectorXd target_vel(7);
         std::copy(trajectory.points[waypoint_position].positions.begin(),trajectory.points[waypoint_position].positions.end(),target_pos.data());
-        cubicFunc = findCubicFunction(gen3_robot.q,target_pos,gen3_robot.q_dot,waypoint_interval);
+        std::copy(trajectory.points[waypoint_position].velocities.begin(),trajectory.points[waypoint_position].velocities.end(),target_vel.data());
+        Eigen::VectorXd diff = gen3_robot.q - radiansToDegrees(target_pos);
+        if(diff.cwiseAbs().maxCoeff()>180){
+          for (int i : gen3_robot.continuous_joints)
+          {
+            if(abs(diff(i))>180)
+            {
+              RCLCPP_WARN_STREAM(LOGGER, "Large desired diff in continuous joint. Look at Joint: "<<i+1<<"\n");
+            }
+          }
+        }
+        cubicFunc = findCubicFunction(gen3_robot.q,radiansToDegrees(target_pos),gen3_robot.q_dot,radiansToDegrees(target_vel),waypoint_interval);
         waypoint_reached = false;
         time_slice_position = 0;
         waypoint_position++;
         std::cout << "Waypoint position: " << waypoint_position << "/" << waypoint_end << std::endl;
-        std::cout << "Current pos: " << gen3_robot.q.transpose() << "\nCurrent target: " << target_pos.transpose() << "\n Cubic func: "<< cubicFunc.transpose()<<std::endl;
+        std::cout << "Current pos: " << gen3_robot.q.transpose() << "\nCurrent target: " << radiansToDegrees(target_pos).transpose()<<std::endl;
+        std::cout << "Current vel: " << gen3_robot.q_dot.transpose() << "\nCurrent target: " << radiansToDegrees(target_vel).transpose()<<std::endl;
       }
     }
     //Get next joint position for timestep
@@ -220,8 +233,8 @@ int main(int argc, char** argv)
       gen3_robot.checkFeedback();
       // gen3_util.updateEEPose(gen3_robot.q);
       // // std::cout<<"Step: "<< i <<" - sleep time: "<< elapsed.count() <<" - run time: "<< runTime.count()  <<" - Joint Positions: " << gen3_robot.q.transpose() << std::endl;
-      std::cout<<"Desired Joint position: " << next_joint_step << std::endl;
-      std::cout <<"Current joint position: " << gen3_robot.q << std::endl;
+      // std::cout<<"Desired Joint position: " << next_joint_step << std::endl;
+      // std::cout <<"Current joint position: " << gen3_robot.q << std::endl;
       // // std::cout<<"EE position: " << gen3_util.current_ee_position.transpose()<<"\n" << std::endl;
       // auto time_point1 = chrono::high_resolution_clock::now();
 

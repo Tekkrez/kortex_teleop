@@ -124,6 +124,12 @@ bool kortex_robot::getFeedback()
     for(int i=0; i<q.size();i++)
     {
         q(i) = base_feedback.actuators(i).position();
+        //Make it in the range of [-x,x] instead of the kortex default of {[0,x],[360-x,360)} for non_continuous_joints
+        //Do it to all of them for consistency
+        if(q(i)>180)
+        {
+            q(i) = q(i)-360;
+        }
         q_dot(i) = base_feedback.actuators(i).velocity();
     }
     return true;    
@@ -132,9 +138,15 @@ bool kortex_robot::getFeedback()
 //Checks feedback if it is being updated by other functions like sendPosition
 void kortex_robot::checkFeedback()
 {
-    for(int i=0; i<q.size();i++)
+     for(int i=0; i<q.size();i++)
     {
         q(i) = base_feedback.actuators(i).position();
+        //Make it in the range of [-x,x] instead of the kortex default of {[0,x],[360-x,360)} for non_continuous_joints
+        //Do it to all of them for consistency
+        if(q(i)>180)
+        {
+            q(i) = q(i)-360;
+        }
         q_dot(i) = base_feedback.actuators(i).velocity();
     }
 }
@@ -172,8 +184,11 @@ bool kortex_robot::sendPosition(const Eigen::VectorXd& desired_q_step)
         }
         //Set new desired position and id for new command
         for(int i =0; i<q.size(); i++)
-        {
-            base_command.mutable_actuators(i)->set_position(fmod(desired_q_step(i),360.0));
+        {   
+            
+                std::cout<<"Requesting this angle: "<<desired_q_step(i)<< std::endl;
+                base_command.mutable_actuators(i)->set_position(fmod(desired_q_step(i),360.0));
+            
             base_command.mutable_actuators(i)->set_command_id(base_command.frame_id());
         }
         base_feedback = base_cyclic->Refresh(base_command,0);

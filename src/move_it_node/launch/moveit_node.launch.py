@@ -28,6 +28,7 @@ def generate_launch_description():
         "gripper_max_velocity": "100.0",
         "gripper_max_force": "100.0",
         "use_internal_bus_gripper_comm": "true",
+        "vision" : "true",
     }
 
     # rviz with moveit configuration
