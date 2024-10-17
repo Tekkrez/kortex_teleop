@@ -1,0 +1,13 @@
+/gen3_control_node:
+  ros__parameters:
+    enable_send_position: true
+    pos_pub_rate: 60
+    pub_test_positions: false
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    use_sim_time: false

@@ -96,3 +96,12 @@ Eigen::VectorXd stdVecToEigen(const std::vector<double>& vec)
   std::copy(vec.begin(),vec.end(),eig_vec.data());
   return eig_vec;
 }
+
+//Given desired rate in hz, and frequency of main loop in hz
+//Returns num of loops to achive desired rate
+//Hz must be less than loopRate to achieve desired behaviour
+int hzToLoopNum(const int& hz, const int& loopRate)
+{
+  return static_cast<int>(round(loopRate/hz));
+}
+

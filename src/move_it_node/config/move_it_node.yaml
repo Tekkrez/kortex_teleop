@@ -1,0 +1,6 @@
+/move_it_node:
+  ros__parameters:
+    soft_joint_speed_limit: 0.2
+    time_step: 0.1
+    linear_distance_thresh: 0.005
+    angular_distance_thresh: 0.01

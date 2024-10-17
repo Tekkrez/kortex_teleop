@@ -20,6 +20,7 @@ Eigen::Matrix<double,1,7> next_joint_step;
 double target_time;
 Eigen::VectorXd time_slices;
 Eigen::Matrix<double,4,7> cubicFunc;
+
 //Kortex_robot
 auto gen3_robot = kortex_robot();
 
@@ -35,12 +36,19 @@ int main(int argc, char** argv)
 {
   // Initialize nodes and load parameters
   rclcpp::init(argc, argv);
-  rclcpp::NodeOptions node_options;
-  node_options.automatically_declare_parameters_from_overrides(true);
-  auto gen3_control_node = rclcpp::Node::make_shared("gen3_control_node",node_options);
+  // rclcpp::NodeOptions node_options;
+  // node_options.automatically_declare_parameters_from_overrides(true);
+  auto gen3_control_node = rclcpp::Node::make_shared("gen3_control_node");
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(gen3_control_node);
   std::thread([&executor]() { executor.spin(); }).detach();
+  // Params
+  gen3_control_node->declare_parameter("pos_pub_rate",60);
+  gen3_control_node->declare_parameter("enable_send_position",true);
+  gen3_control_node->declare_parameter("pub_test_positions",false);
+  int pos_pub_rate = gen3_control_node->get_parameter("pos_pub_rate").as_int();
+  bool enable_send_position = gen3_control_node->get_parameter("enable_send_position").as_bool();
+  bool pub_test_positions = gen3_control_node->get_parameter("pub_test_positions").as_bool();
   //Joint state publisher
   rclcpp::QoS pub_qos(1);
   pub_qos.best_effort();
@@ -58,7 +66,7 @@ int main(int argc, char** argv)
   gen3_robot.setLowLevelServoing();
   gen3_robot.getFeedback();
   gen3_robot.setBaseCommand();
-
+  int pos_pub_period = hzToLoopNum(pos_pub_rate,rate);
   rclcpp::Rate loop_rate(rate);
   int i=0;
   while(rclcpp::ok())
@@ -81,18 +89,22 @@ int main(int argc, char** argv)
       Eigen::Matrix<double,1,4> time_matrix;
       time_matrix <<  1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3);
       next_joint_step = time_matrix*cubicFunc;
-
-      //Send joint step
-      if(!gen3_robot.sendPosition(next_joint_step.transpose()))
+      if(enable_send_position)
+      {
+        //Send joint step
+        if(!gen3_robot.sendPosition(next_joint_step.transpose()))
         {
           std::cout<<"Send position error!!"<< std::endl;
           break;
         }
-      
-      //Pub joint_pos
-      auto test_message = std_msgs::msg::Float64MultiArray();
-      test_message.data = eigenToStdVec(next_joint_step);
-      joint_pos_test_pub->publish(test_message);
+      }
+      if(pub_test_positions)
+      {
+        //Pub joint_pos
+        auto test_message = std_msgs::msg::Float64MultiArray();
+        test_message.data = eigenToStdVec(next_joint_step);
+        joint_pos_test_pub->publish(test_message);
+      }
       //Check if end of time slice
       traj_position++;
       if(traj_position == time_slices.size())
@@ -109,7 +121,7 @@ int main(int argc, char** argv)
       }
     }
 
-    if(!(i%100))
+    if(!(i%pos_pub_period))
     {
       //TODO: Get rid of this check later
       gen3_robot.checkFeedback();

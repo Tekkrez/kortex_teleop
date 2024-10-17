@@ -30,18 +30,13 @@ geometry_msgs::msg::Pose target_pose;
 std::vector<double> desired_state;
 Eigen::VectorXd desired_q(7);
 Eigen::Isometry3d prevPose;
-
-//Params
-double soft_joint_speed_limit = 0.2; //rad/sec
-double time_step = 0.1;
-double linear_distance_thresh = 0.005;
-double angular_distance_thresh = 0.01;
+//params
+double soft_joint_speed_limit,time_step,linear_distance_thresh,angular_distance_thresh;
 
 // Flags
 bool new_target_pose = false;
 bool traj_gen_needed = false;
 bool new_joint_state = false;
-bool doOnce = true;
 
 void jointState_Callback(const sensor_msgs::msg::JointState& msg)
 {
@@ -130,6 +125,12 @@ int main(int argc,char** argv)
     rclcpp::NodeOptions node_options;
     node_options.automatically_declare_parameters_from_overrides(true);
     auto traj_pub_node = rclcpp::Node::make_shared("traj_pub_node", node_options);
+    //Params
+    soft_joint_speed_limit = traj_pub_node->get_parameter("soft_joint_speed_limit").as_double(); //rad/sec
+    time_step = traj_pub_node->get_parameter("time_step").as_double();
+    linear_distance_thresh = traj_pub_node->get_parameter("linear_distance_thresh").as_double();
+    angular_distance_thresh = traj_pub_node->get_parameter("angular_distance_thresh").as_double();
+    
     //Subscribers
     rclcpp::QoS sub_qos(1);
     sub_qos.best_effort();
@@ -210,11 +211,10 @@ int main(int argc,char** argv)
 
     const moveit::core::JointModelGroup* joint_model_group = current_state.getJointModelGroup(PLANNING_GROUP);
 
-    auto time_point1 = std::chrono::high_resolution_clock::now();
+    // auto time_point1 = std::chrono::high_resolution_clock::now();
 
     while(rclcpp::ok())
     {
-        //TODO: Add error magnitude checking. Should only work if the last generated solution is collision
         if(new_target_pose && new_joint_state)
         {   
             //Reset flag
@@ -269,11 +269,12 @@ int main(int argc,char** argv)
                 Eigen::VectorXd adjusted_target = targetAdjustmentContinuousJoints(latest_q,desired_q);
                 Eigen::VectorXd diff = adjusted_target-latest_q;
                 double completion_time = diff.cwiseAbs().maxCoeff()/soft_joint_speed_limit;
-                completion_time = round(completion_time/time_step)*time_step;
+                if(completion_time>time_step){
+                    completion_time = round(completion_time/time_step)*time_step;
+                }
                 cubicFunc = findCubicFunction(latest_q, adjusted_target, latest_q_dot, completion_time);
                 RCLCPP_INFO_STREAM(LOGGER, "Cubic Function:\n" << cubicFunc << "\n");
 
-                //TODO: Add checking for max time_slice required
                 Eigen::VectorXd time_slices = Eigen::VectorXd::LinSpaced(completion_time/time_step,time_step,completion_time);
                 
                 for (int i=0; i<time_slices.size();i++)

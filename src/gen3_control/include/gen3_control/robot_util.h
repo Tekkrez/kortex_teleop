@@ -11,6 +11,7 @@ Eigen::VectorXd radiansToDegrees(const Eigen::VectorXd& vec);
 Eigen::VectorXd degreesToRadians(const Eigen::VectorXd& vec);
 std::vector<double> eigenToStdVec(const Eigen::VectorXd& vec);
 Eigen::VectorXd stdVecToEigen(const std::vector<double>& vec);
+int hzToLoopNum(const int& hz, const int& loopRate);
 //inverse kin current_ee_orientation
 
 //conversions
