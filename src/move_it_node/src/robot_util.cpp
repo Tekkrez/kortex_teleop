@@ -2,7 +2,7 @@
 
 //Finds coefficients for a cubic function. End speed is set to be 0
 //TODO: Add ability for circular interpolation b/w 0/360 deg
-Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::VectorXd endPos,Eigen::VectorXd startSpeed,double endTime){
+Eigen::Matrix<double,4,7> findCubicFunction(const Eigen::VectorXd& startPos,const Eigen::VectorXd& endPos,const Eigen::VectorXd& startSpeed,double endTime){
   Eigen::Matrix<double,4,4> timeMatrix;
   timeMatrix(0,Eigen::all) <<  1,0,0,0;
   timeMatrix(1,Eigen::all) <<  0,1,0,0;
@@ -25,7 +25,7 @@ Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::Vect
 
 //Create cubic smooth trajectory using start and position for each of the joints
 //Soft speed limit is used to determine time to complete trajectory
-Eigen::MatrixXd createTrajectory(Eigen::VectorXd start_position, Eigen::VectorXd end_position, Eigen::VectorXd start_speed, double soft_joint_speed_limit, double time_step)
+Eigen::MatrixXd createTrajectory(const Eigen::VectorXd& start_position, const Eigen::VectorXd& end_position, const Eigen::VectorXd& start_speed, double soft_joint_speed_limit, double time_step)
 {
   //Find Coefficients scaled by soft joint speed limit
   Eigen::VectorXd diff = end_position-start_position;
@@ -51,17 +51,17 @@ Eigen::MatrixXd createTrajectory(Eigen::VectorXd start_position, Eigen::VectorXd
   return joint_traj;
 }
 
-Eigen::VectorXd radiansToDegrees(Eigen::VectorXd vec)
+Eigen::VectorXd radiansToDegrees(const Eigen::VectorXd& vec)
 {
   return vec*180/M_PI;
 }
 
-Eigen::VectorXd degreesToRadians(Eigen::VectorXd vec)
+Eigen::VectorXd degreesToRadians(const Eigen::VectorXd& vec)
 {
   return vec*M_PI/180;
 }
 
-Eigen::VectorXd vectorFMod(Eigen::VectorXd vec)
+Eigen::VectorXd vectorFMod(const Eigen::VectorXd& vec)
 {
   Eigen::VectorXd retVec(7);
   for(int i=0; i<vec.size(); i++)

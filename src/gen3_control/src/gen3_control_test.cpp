@@ -99,11 +99,11 @@ int main(int argc, char** argv)
     }
     if(i>5000 && j<time_slices.size()){
 
-        if(!gen3_robot.sendPosition(joint_traj.row(j).transpose()))
-        {
-          std::cout<<"Send position error!!"<< std::endl;
-          break;
-        }
+        // if(!gen3_robot.sendPosition(joint_traj.row(j).transpose()))
+        // {
+        //   std::cout<<"Send position error!!"<< std::endl;
+        //   break;
+        // }
         j++;
         gen3_robot.checkFeedback();
     }

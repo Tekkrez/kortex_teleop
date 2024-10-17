@@ -16,10 +16,10 @@ find_package(Eigen3 REQUIRED)
 find_package(pinocchio REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
-find_package(custom_teleop_messages REQUIRED)
+find_package(std_msgs REQUIRED)
 
 
-add_executable(gen3_control src/gen3_control.cpp src/kortex_robot.cpp src/robot_util.cpp custom_teleop_messages)
+add_executable(gen3_control src/gen3_control.cpp src/kortex_robot.cpp src/robot_util.cpp)
 add_executable(gen3_control_test src/gen3_control_test.cpp src/kortex_robot.cpp src/robot_util.cpp)
 
 ament_target_dependencies(gen3_control PUBLIC
@@ -27,7 +27,7 @@ ament_target_dependencies(gen3_control PUBLIC
   Eigen3
   sensor_msgs
   trajectory_msgs
-  custom_teleop_messages
+  std_msgs
   )
 ament_target_dependencies(gen3_control_test PUBLIC
   rclcpp

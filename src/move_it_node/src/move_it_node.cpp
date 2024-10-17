@@ -9,10 +9,11 @@
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <visualization_msgs/msg/marker.hpp>
-#include <trajectory_msgs/msg/joint_trajectory.hpp>
+#include <trajectory_msgs/msg/joint_trajectory_point.h>
 // Util
 #include <robot_util.h>
 #include <chrono>
+#include <tf2_eigen/tf2_eigen.hpp>
 using std::placeholders::_1;
 
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("moveit_traj_node");
@@ -24,21 +25,28 @@ std::vector<int> non_continuous_joints = {1,3,5};
 Eigen::VectorXd latest_q(7);
 Eigen::VectorXd latest_q_dot(7);
 
-
+//Targets
+geometry_msgs::msg::Pose target_pose;
 std::vector<double> desired_state;
 Eigen::VectorXd desired_q(7);
+Eigen::Isometry3d prevPose;
 
 //Params
 double soft_joint_speed_limit = 0.2; //rad/sec
 double time_step = 0.1;
+double linear_distance_thresh = 0.005;
+double angular_distance_thresh = 0.01;
 
 // Flags
-bool new_joint_state = false;
+bool new_target_pose = false;
 bool traj_gen_needed = false;
+bool new_joint_state = false;
 bool doOnce = true;
 
 void jointState_Callback(const sensor_msgs::msg::JointState& msg)
 {
+
+    new_joint_state = true;
     std::vector<double> positions;
     std::vector<double> velocities;
 
@@ -47,7 +55,25 @@ void jointState_Callback(const sensor_msgs::msg::JointState& msg)
 
     std::copy(positions.begin(),positions.end(),latest_q.data());
     std::copy(velocities.begin(),velocities.end(),latest_q_dot.data());
-    new_joint_state = true;
+}
+void targetPose_callback(const geometry_msgs::msg::Pose& msg)
+{
+    //Check if diffrent from previous target pose
+    Eigen::Isometry3d desPose;
+    tf2::fromMsg(msg,desPose);
+    double const linear_distance = (desPose.translation()-prevPose.translation()).norm();
+    auto const q_1 = Eigen::Quaterniond(desPose.rotation());
+    auto const q_2 = Eigen::Quaterniond(prevPose.rotation());
+    double const angular_distance = q_2.angularDistance(q_1);
+    std::cout<<"New Pose Received: "<<std::endl;
+    //Update target pose if different enough
+    if(linear_distance>linear_distance_thresh || std::abs(angular_distance)>angular_distance_thresh)
+    {
+        std::cout<<"New Pose is different enough: "<<std::endl;
+        target_pose = msg;
+        prevPose = desPose;
+        new_target_pose = true;
+    }
 }
 
 Eigen::VectorXd targetAdjustmentContinuousJoints(Eigen::VectorXd& currentPos, Eigen::VectorXd& targetPos)
@@ -105,16 +131,19 @@ int main(int argc,char** argv)
     node_options.automatically_declare_parameters_from_overrides(true);
     auto traj_pub_node = rclcpp::Node::make_shared("traj_pub_node", node_options);
     //Subscribers
-    rclcpp::QoS sub_qos(3);
+    rclcpp::QoS sub_qos(1);
     sub_qos.best_effort();
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr jointState_sub;
     jointState_sub = traj_pub_node->create_subscription<sensor_msgs::msg::JointState>("joint_states",sub_qos,jointState_Callback);
+    //Desired Pose sub
+    rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr pose_sub;
+    pose_sub= traj_pub_node->create_subscription<geometry_msgs::msg::Pose>("desired_pose",sub_qos,targetPose_callback);
     //Rviz2 marker pub
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub;
     marker_pub = traj_pub_node->create_publisher<visualization_msgs::msg::Marker>("visualization_marker",1);
     //Joint trajectory pub
-    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr joint_traj_pub;
-    joint_traj_pub = traj_pub_node->create_publisher<trajectory_msgs::msg::JointTrajectory>("joint_trajectory",1);
+    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectoryPoint>::SharedPtr joint_traj_pub;
+    joint_traj_pub = traj_pub_node->create_publisher<trajectory_msgs::msg::JointTrajectoryPoint>("joint_trajectory",1);
 
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(traj_pub_node);
@@ -181,27 +210,23 @@ int main(int argc,char** argv)
 
     const moveit::core::JointModelGroup* joint_model_group = current_state.getJointModelGroup(PLANNING_GROUP);
 
-    geometry_msgs::msg::Pose target_pose;
-    target_pose.orientation.w = 1.0;
-    target_pose.position.x = 0.3;
-    target_pose.position.y = -0.3;
-    target_pose.position.z = 0.7;
-
     auto time_point1 = std::chrono::high_resolution_clock::now();
 
     while(rclcpp::ok())
     {
         //TODO: Add error magnitude checking. Should only work if the last generated solution is collision
-        if(new_joint_state && doOnce)
-        {   doOnce = false;
+        if(new_target_pose && new_joint_state)
+        {   
             //Reset flag
-            new_joint_state=false;
+            new_target_pose = false;
+            new_joint_state = false;
             //Update current Joint State
             current_state.setJointGroupPositions(joint_model_group,latest_q);
             if(!current_state.setFromIK(joint_model_group,target_pose,"end_effector_link",0.0))
             {
                 RCLCPP_WARN_STREAM(LOGGER, "IK not found"<<"\n");
-                // marker_pub->publish(box);
+                //redo the traj gen process with the hope of getting one that works
+                new_target_pose = true;
             }
             else
             {
@@ -210,8 +235,8 @@ int main(int argc,char** argv)
             collision_result.clear();
             potential_state.setJointGroupPositions(joint_model_group,desired_state);
             planning_scene.checkCollision(collision_request, collision_result, potential_state);
-            auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()-time_point1);
-            RCLCPP_INFO_STREAM(LOGGER, "Collision detection time: "<< elapsed.count() <<"\n");
+            // auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()-time_point1);
+            // RCLCPP_INFO_STREAM(LOGGER, "Collision detection time: "<< elapsed.count() <<"\n");
 
             if(collision_result.collision)
             {
@@ -221,6 +246,8 @@ int main(int argc,char** argv)
                 {
                     RCLCPP_INFO(LOGGER, "Contact between: %s and %s", it->first.first.c_str(), it->first.second.c_str());
                 }
+                //redo the traj gen process with the hope of getting one that works
+                new_target_pose = true;
             }
             else
             {
@@ -248,10 +275,7 @@ int main(int argc,char** argv)
 
                 //TODO: Add checking for max time_slice required
                 Eigen::VectorXd time_slices = Eigen::VectorXd::LinSpaced(completion_time/time_step,time_step,completion_time);
-                //Create Trajectory
-                trajectory_msgs::msg::JointTrajectory joint_traj;
-                joint_traj.joint_names = joint_names;
-                joint_traj.points.resize(time_slices.size());
+                
                 for (int i=0; i<time_slices.size();i++)
                 {
                     Eigen::Matrix<double,2,4> time_matrix;
@@ -275,24 +299,17 @@ int main(int argc,char** argv)
                         {
                             RCLCPP_INFO(LOGGER, "Contact between: %s and %s at time slice %d", it->first.first.c_str(), it->first.second.c_str(),i+1);
                         }
-                        joint_traj.points.resize(i);
+                        //redo the traj gen process with the hope of getting one that works
+                        new_target_pose = true;
                         break;
                     }
-                    else
-                    {
-                        joint_traj.points[i] = fillJointTrajectoryPoint(result.row(0),result.row(1),time_slices(i));
-                    }
                 }
-                //TODO: Add this back later
-                // if(!collision_result.collision)
-                // {
-                //     //pub joint_trajectory
-                //     joint_traj_pub->publish(joint_traj);
 
-                // }
-
-                //pub joint_trajectory
-                joint_traj_pub->publish(joint_traj);
+                if(!collision_result.collision)
+                {
+                    //pub joint_trajectory
+                    joint_traj_pub->publish(fillJointTrajectoryPoint(adjusted_target, Eigen::VectorXd::Zero(7), completion_time));
+                }
             }
         }
     }

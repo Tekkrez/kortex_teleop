@@ -75,7 +75,9 @@ def generate_launch_description():
         package="move_it_node",
         executable="moveit_node",
         output="screen",
+        emulate_tty=True,
         parameters=[moveit_config.to_dict()],
+    
     )
     
     return LaunchDescription([

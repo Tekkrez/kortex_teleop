@@ -1,7 +1,7 @@
 #include "robot_util.h"
 
 //Finds coefficients for a cubic function. End speed is set to be 0
-Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::VectorXd endPos,Eigen::VectorXd startSpeed,double endTime){
+Eigen::Matrix<double,4,7> findCubicFunction(const Eigen::VectorXd& startPos,const Eigen::VectorXd& endPos,const Eigen::VectorXd& startSpeed,double endTime){
   Eigen::Matrix<double,4,4> timeMatrix;
   timeMatrix(0,Eigen::all) <<  1,0,0,0;
   timeMatrix(1,Eigen::all) <<  0,1,0,0;
@@ -23,7 +23,7 @@ Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::Vect
 }
 
 //Finds coefficients for a cubic function
-Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::VectorXd endPos,Eigen::VectorXd startSpeed,Eigen::VectorXd endSpeed,double endTime){
+Eigen::Matrix<double,4,7> findCubicFunction(const Eigen::VectorXd& startPos,const Eigen::VectorXd& endPos,const Eigen::VectorXd& startSpeed,const Eigen::VectorXd& endSpeed,double endTime){
   Eigen::Matrix<double,4,4> timeMatrix;
   timeMatrix(0,Eigen::all) <<  1,0,0,0;
   timeMatrix(1,Eigen::all) <<  0,1,0,0;
@@ -46,7 +46,7 @@ Eigen::Matrix<double,4,7> findCubicFunction(Eigen::VectorXd startPos,Eigen::Vect
 
 //Create cubic smooth trajectory using start and position for each of the joints
 //Soft speed limit is used to determine time to complete trajectory
-Eigen::MatrixXd createTrajectory(Eigen::VectorXd start_position,Eigen::VectorXd end_position,Eigen::VectorXd start_speed,double soft_joint_speed_limit,double time_step)
+Eigen::MatrixXd createTrajectory(const Eigen::VectorXd& start_position,const Eigen::VectorXd& end_position,const Eigen::VectorXd& start_speed,double soft_joint_speed_limit,double time_step)
 {
   //Find Coefficients scaled by soft joint speed limit
   Eigen::VectorXd diff = end_position-start_position;
@@ -72,14 +72,27 @@ Eigen::MatrixXd createTrajectory(Eigen::VectorXd start_position,Eigen::VectorXd 
   return joint_traj;
 }
 
-Eigen::VectorXd radiansToDegrees(Eigen::VectorXd vec)
+Eigen::VectorXd radiansToDegrees(const Eigen::VectorXd& vec)
 {
   return vec*180/M_PI;
 }
 
-Eigen::VectorXd degreesToRadians(Eigen::VectorXd vec)
+Eigen::VectorXd degreesToRadians(const Eigen::VectorXd& vec)
 {
   return vec*M_PI/180;
 }
 
-//Does radians to degrees conversion and applies mod operation
+std::vector<double> eigenToStdVec(const Eigen::VectorXd& vec)
+{
+  std::vector<double> vec_vec;
+  vec_vec.resize(vec.size());
+  Eigen::VectorXd::Map(&vec_vec[0],vec_vec.size()) = vec;
+  return vec_vec;
+}
+
+Eigen::VectorXd stdVecToEigen(const std::vector<double>& vec)
+{
+  Eigen::VectorXd eig_vec(vec.size());
+  std::copy(vec.begin(),vec.end(),eig_vec.data());
+  return eig_vec;
+}

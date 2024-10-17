@@ -10,7 +10,8 @@
         "/opt/ros/humble/include/**",
         "/home/kevin/once_again/src/gen3_control/include/**",
         "/usr/include/**",
-        "${workspaceFolder}/src/gen3_control/include/**"
+        "${workspaceFolder}/src/gen3_control/include/**",
+        "${workspaceFolder}/install/custom_teleop_messages/**"
       ],
       "name": "ROS",
       "intelliSenseMode": "gcc-x64",
