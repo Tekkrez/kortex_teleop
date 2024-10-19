@@ -4,25 +4,25 @@ project(vr_manager)
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
+
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(tf2_eigen REQUIRED)
 
+add_executable(vr_manager_node src/vr_manager_node.cpp)
 
+ament_target_dependencies(vr_manager_node rclcpp geometry_msgs tf2_eigen)
 
-add_executable(move_it_node src/move_it_node.cpp src/robot_util.cpp)
-
-ament_target_dependencies(move_it_node rclcpp moveit_ros_planning_interface pluginlib sensor_msgs geometry_msgs visualization_msgs trajectory_msgs geometry_msgs)
-
-target_include_directories(move_it_node
-  PUBLIC
-  ${PROJECT_SOURCE_DIR}/include/move_it_node
-  )
+# target_include_directories(vr_manager_node
+#   PUBLIC
+#   ${PROJECT_SOURCE_DIR}/include/${PROJECT_NAME}
+#   )
 
 install(
   TARGETS
-    move_it_node
+  vr_manager_node
   DESTINATION
     lib/${PROJECT_NAME}
 )
@@ -36,6 +36,7 @@ install(DIRECTORY include
 # install(DIRECTORY config
 #   DESTINATION share/${PROJECT_NAME}
 # )
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
