@@ -20,7 +20,7 @@ find_package(std_msgs REQUIRED)
 
 
 add_executable(gen3_control src/gen3_control.cpp src/kortex_robot.cpp src/robot_util.cpp)
-add_executable(gen3_control_test src/gen3_control_test.cpp src/kortex_robot.cpp src/robot_util.cpp)
+# add_executable(gen3_control_test src/gen3_control_test.cpp src/kortex_robot.cpp src/robot_util.cpp)
 
 ament_target_dependencies(gen3_control PUBLIC
   rclcpp
@@ -29,12 +29,12 @@ ament_target_dependencies(gen3_control PUBLIC
   trajectory_msgs
   std_msgs
   )
-ament_target_dependencies(gen3_control_test PUBLIC
-  rclcpp
-  Eigen3
-  sensor_msgs
-  trajectory_msgs
-  )
+# ament_target_dependencies(gen3_control_test PUBLIC
+#   rclcpp
+#   Eigen3
+#   sensor_msgs
+#   trajectory_msgs
+#   )
 
 target_link_libraries(gen3_control PUBLIC
   pthread
@@ -42,11 +42,11 @@ target_link_libraries(gen3_control PUBLIC
   pinocchio::pinocchio
   )
 
-target_link_libraries(gen3_control_test PUBLIC
-  pthread
-  ${PROJECT_SOURCE_DIR}/lib/release/libKortexApiCpp.a
-  pinocchio::pinocchio
-  )
+# target_link_libraries(gen3_control_test PUBLIC
+#   pthread
+#   ${PROJECT_SOURCE_DIR}/lib/release/libKortexApiCpp.a
+#   pinocchio::pinocchio
+#   )
 
 target_include_directories(gen3_control
   PUBLIC
@@ -57,15 +57,15 @@ target_include_directories(gen3_control
   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/common
   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/messages
   )
-target_include_directories(gen3_control_test
-  PUBLIC
-  # ${PROJECT_SOURCE_DIR}/include
-  ${PROJECT_SOURCE_DIR}/include/gen3_control
-  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client
-  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client_stubs
-  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/common
-  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/messages
-  )
+# target_include_directories(gen3_control_test
+#   PUBLIC
+#   # ${PROJECT_SOURCE_DIR}/include
+#   ${PROJECT_SOURCE_DIR}/include/gen3_control
+#   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client
+#   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client_stubs
+#   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/common
+#   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/messages
+#   )
 
 #Install include
 install(DIRECTORY include
@@ -81,7 +81,7 @@ install(DIRECTORY config
 install(
   TARGETS 
     gen3_control
-    gen3_control_test
+    # gen3_control_test
   DESTINATION lib/${PROJECT_NAME}
 )
 
