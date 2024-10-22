@@ -11,14 +11,14 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2_eigen REQUIRED)
 
-add_executable(vr_manager_node src/vr_manager_node.cpp)
+add_executable(vr_manager_node src/vr_manager_node.cpp src/vr_manager_utils.cpp)
 
 ament_target_dependencies(vr_manager_node rclcpp geometry_msgs tf2_eigen)
 
-# target_include_directories(vr_manager_node
-#   PUBLIC
-#   ${PROJECT_SOURCE_DIR}/include/${PROJECT_NAME}
-#   )
+target_include_directories(vr_manager_node
+  PUBLIC
+  ${PROJECT_SOURCE_DIR}/include/${PROJECT_NAME}
+  )
 
 install(
   TARGETS
