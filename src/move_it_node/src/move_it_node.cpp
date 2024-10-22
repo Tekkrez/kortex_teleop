@@ -7,7 +7,7 @@
 #include <moveit/kinematic_constraints/utils.h>
 //MSGs
 #include <sensor_msgs/msg/joint_state.hpp>
-#include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.h>
 // Util
@@ -26,7 +26,7 @@ Eigen::VectorXd latest_q(7);
 Eigen::VectorXd latest_q_dot(7);
 
 //Targets
-geometry_msgs::msg::Pose target_pose;
+geometry_msgs::msg::PoseStamped target_pose;
 std::vector<double> desired_state;
 Eigen::VectorXd desired_q(7);
 Eigen::Isometry3d prevPose;
@@ -51,11 +51,11 @@ void jointState_Callback(const sensor_msgs::msg::JointState& msg)
     std::copy(positions.begin(),positions.end(),latest_q.data());
     std::copy(velocities.begin(),velocities.end(),latest_q_dot.data());
 }
-void targetPose_callback(const geometry_msgs::msg::Pose& msg)
+void targetPose_callback(const geometry_msgs::msg::PoseStamped& msg)
 {
     //Check if diffrent from previous target pose
     Eigen::Isometry3d desPose;
-    tf2::fromMsg(msg,desPose);
+    tf2::fromMsg(msg.pose,desPose);
     double const linear_distance = (desPose.translation()-prevPose.translation()).norm();
     auto const q_1 = Eigen::Quaterniond(desPose.rotation());
     auto const q_2 = Eigen::Quaterniond(prevPose.rotation());
@@ -137,8 +137,8 @@ int main(int argc,char** argv)
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr jointState_sub;
     jointState_sub = traj_pub_node->create_subscription<sensor_msgs::msg::JointState>("joint_states",sub_qos,jointState_Callback);
     //Desired Pose sub
-    rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr pose_sub;
-    pose_sub= traj_pub_node->create_subscription<geometry_msgs::msg::Pose>("desired_pose",sub_qos,targetPose_callback);
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub;
+    pose_sub= traj_pub_node->create_subscription<geometry_msgs::msg::PoseStamped>("desired_pose",sub_qos,targetPose_callback);
     //Rviz2 marker pub
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub;
     marker_pub = traj_pub_node->create_publisher<visualization_msgs::msg::Marker>("visualization_marker",1);
@@ -222,7 +222,7 @@ int main(int argc,char** argv)
             new_joint_state = false;
             //Update current Joint State
             current_state.setJointGroupPositions(joint_model_group,latest_q);
-            if(!current_state.setFromIK(joint_model_group,target_pose,"end_effector_link",0.0))
+            if(!current_state.setFromIK(joint_model_group,target_pose.pose,"end_effector_link",0.0))
             {
                 RCLCPP_WARN_STREAM(LOGGER, "IK not found"<<"\n");
                 //redo the traj gen process with the hope of getting one that works

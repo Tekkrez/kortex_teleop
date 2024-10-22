@@ -3,6 +3,8 @@
 #include <Eigen/Dense>
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <vr_manager_utils.h>
+#include <chrono>
+#include <std_msgs/msg/float64.hpp>
 
 using std::placeholders::_1;
 
@@ -21,12 +23,13 @@ class VRManager : public rclcpp::Node
         Eigen::Quaterniond right_rel_quaternion;
         LowPassFilter pos_filter;
         LowPassFilter quat_filter;
+        std::chrono::high_resolution_clock::time_point time_point;
         rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr VR_pose_sub;
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr hmd_pose_pub;
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr right_pose_pub;
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr right_rel_pose_pub;
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr right_shoulder_pose_pub;
-
+        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr delta_time_pub;
         void VRPose_callback(const geometry_msgs::msg::PoseArray& msg)
         {
             Eigen::Isometry3d hmd_pose,right_pose,right_rel_pose;
@@ -46,29 +49,30 @@ class VRManager : public rclcpp::Node
                 //TODO: Setup alpha as param
                 quat_filter.lowPassFilterInit(right_rel_quaternion.coeffs(),0.2);
                 pos_filter.lowPassFilterInit(right_rel_pose.translation(),0.15);
-
-                //Reset pose filter
+                //Setup time_point
+                time_point = std::chrono::high_resolution_clock::now();
             }
-
+            double time_delta = 0.001*std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()-time_point).count();
+            time_point = std::chrono::high_resolution_clock::now();
             //Define pose wrt initial shoulder point
             right_rel_pose = shoulder_ref.inverse()*right_pose;
             //Check for quaternion flipping with prev quaternion
             if(Eigen::Quaterniond(right_rel_pose.rotation()).dot(right_rel_quaternion)<0)
             {
                 Eigen::Quaterniond new_quat(right_rel_pose.rotation());
-                right_rel_quaternion = Eigen::Quaterniond(Eigen::Vector4d(quat_filter.applyFilter(-1*new_quat.coeffs())));
+                right_rel_quaternion = Eigen::Quaterniond(Eigen::Vector4d(quat_filter.applyFilterTimeScaled(-1*new_quat.coeffs(),time_delta,0.05)));
                 right_rel_quaternion.normalize();
             }
             else
             {
                 Eigen::Quaterniond new_quat(right_rel_pose.rotation());
-                right_rel_quaternion  = Eigen::Quaterniond(Eigen::Vector4d(quat_filter.applyFilter(new_quat.coeffs())));
+                right_rel_quaternion  = Eigen::Quaterniond(Eigen::Vector4d(quat_filter.applyFilterTimeScaled(new_quat.coeffs(),time_delta,0.05)));
                 right_rel_quaternion.normalize();
             }
             auto right_rel_pose_stamped = geometry_msgs::msg::PoseStamped();
             right_rel_pose_stamped.header.stamp = this->now();
             right_rel_pose_stamped.header.frame_id = "vr_world";
-            right_rel_pose_stamped.pose.position = tf2::toMsg(Eigen::Vector3d(pos_filter.applyFilter(right_rel_pose.translation())));
+            right_rel_pose_stamped.pose.position = tf2::toMsg(Eigen::Vector3d(pos_filter.applyFilterTimeScaled(right_rel_pose.translation(),time_delta)));
             right_rel_pose_stamped.pose.orientation = tf2::toMsg(right_rel_quaternion);
             auto right_shoulder_pose_stamped = geometry_msgs::msg::PoseStamped();
             right_shoulder_pose_stamped.header.stamp = this->now();
@@ -82,11 +86,14 @@ class VRManager : public rclcpp::Node
             right_pose_stamped.header.stamp = this->now();
             right_pose_stamped.header.frame_id = "vr_world";
             right_pose_stamped.pose = msg.poses[device::RIGHT];
+            auto delta_time_msg = std_msgs::msg::Float64();
+            delta_time_msg.data = time_delta;
 
             hmd_pose_pub->publish(hmd_pose_stamped);
             right_pose_pub->publish(right_pose_stamped);
             right_rel_pose_pub->publish(right_rel_pose_stamped);
             right_shoulder_pose_pub->publish(right_shoulder_pose_stamped);
+            delta_time_pub->publish(delta_time_msg);
         }
 
     public:
@@ -99,12 +106,11 @@ class VRManager : public rclcpp::Node
             //Pose Publisher
             hmd_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("hmd_pose",5);
             right_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("right_pose",5);
-            right_rel_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("right_rel_pose",5);
+            right_rel_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("desired_pose",5);
             right_shoulder_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("right_shoulder_pose",5);
+            delta_time_pub = this->create_publisher<std_msgs::msg::Float64>("delta_time",5);
         }   
-
 };
-
 int main(int argc,char** argv)
 {
     rclcpp::init(argc,argv);

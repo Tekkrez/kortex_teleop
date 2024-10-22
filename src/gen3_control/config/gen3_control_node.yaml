@@ -1,6 +1,6 @@
 /gen3_control_node:
   ros__parameters:
-    enable_send_position: true
+    enable_send_position: false
     pos_pub_rate: 60
     pub_test_positions: false
     qos_overrides:

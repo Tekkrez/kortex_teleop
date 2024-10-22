@@ -14,11 +14,12 @@ find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 
 add_executable(move_it_node src/move_it_node.cpp src/robot_util.cpp)
 
-ament_target_dependencies(move_it_node rclcpp moveit_ros_planning_interface pluginlib sensor_msgs geometry_msgs visualization_msgs trajectory_msgs geometry_msgs)
+ament_target_dependencies(move_it_node rclcpp moveit_ros_planning_interface pluginlib sensor_msgs geometry_msgs visualization_msgs trajectory_msgs geometry_msgs tf2_ros)
 
 target_include_directories(move_it_node
   PUBLIC
