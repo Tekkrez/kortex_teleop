@@ -8,7 +8,8 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("gen3_control_node");
-std::vector<std::string> joint_names = { "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7" };
+std::vector<std::string> joint_names = { "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7", "robotiq_85_right_knuckle_joint",
+"robotiq_85_left_inner_knuckle_joint","robotiq_85_right_inner_knuckle_joint" ,"robotiq_85_left_finger_tip_joint","robotiq_85_right_finger_tip_joint","robotiq_85_left_knuckle_joint"};
 //Loop rate var
 int rate = 1100;
 //Variables for trajectory tracking
@@ -129,8 +130,14 @@ int main(int argc, char** argv)
       //Fill in message
       message.header.stamp = gen3_control_node->now();
       message.name = joint_names;
-      message.position = eigenToStdVec(degreesToRadians(gen3_robot.q));
-      message.velocity = eigenToStdVec(degreesToRadians(gen3_robot.q_dot));
+
+      std::vector<double> out_pos = eigenToStdVec(degreesToRadians(gen3_robot.q));
+      std::vector<double> out_vel = eigenToStdVec(degreesToRadians(gen3_robot.q_dot));
+
+      out_pos.resize(13);
+      out_vel.resize(13);
+      message.position = out_pos;
+      message.velocity = out_vel;
       //Publish
       joint_pub->publish(message);
       } 

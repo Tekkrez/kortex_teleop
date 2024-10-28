@@ -1,8 +1,9 @@
-//Eigen
-#include <Eigen/Dense>
 //CPP libs
 #include <cmath>
 #include <vector>
+//Eigen
+#include <eigen3/Eigen/Dense>
+
 
 Eigen::Matrix<double,4,7> findCubicFunction(const Eigen::VectorXd& startPos,const Eigen::VectorXd& endPos,const Eigen::VectorXd& startSpeed,double endTime);
 Eigen::Matrix<double,4,7> findCubicFunction(const Eigen::VectorXd& startPos,const Eigen::VectorXd& endPos,const Eigen::VectorXd& startSpeed, const Eigen::VectorXd& endSpeed,double endTime);
@@ -13,7 +14,6 @@ std::vector<double> eigenToStdVec(const Eigen::VectorXd& vec);
 Eigen::VectorXd stdVecToEigen(const std::vector<double>& vec);
 int hzToLoopNum(const int& hz, const int& loopRate);
 //inverse kin current_ee_orientation
-
 //conversions
 
 //filter

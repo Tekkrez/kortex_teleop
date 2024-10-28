@@ -2,7 +2,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 //Eigen
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 //Kortex stuff
 #include "KDetailedException.h"

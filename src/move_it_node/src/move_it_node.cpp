@@ -13,6 +13,7 @@
 // Util
 #include <robot_util.h>
 #include <chrono>
+#include <thread>
 #include <tf2_eigen/tf2_eigen.hpp>
 using std::placeholders::_1;
 
@@ -60,11 +61,9 @@ void targetPose_callback(const geometry_msgs::msg::PoseStamped& msg)
     auto const q_1 = Eigen::Quaterniond(desPose.rotation());
     auto const q_2 = Eigen::Quaterniond(prevPose.rotation());
     double const angular_distance = q_2.angularDistance(q_1);
-    std::cout<<"New Pose Received: "<<std::endl;
     //Update target pose if different enough
     if(linear_distance>linear_distance_thresh || std::abs(angular_distance)>angular_distance_thresh)
     {
-        std::cout<<"New Pose is different enough: "<<std::endl;
         target_pose = msg;
         prevPose = desPose;
         new_target_pose = true;
@@ -75,7 +74,7 @@ Eigen::VectorXd targetAdjustmentContinuousJoints(Eigen::VectorXd& currentPos, Ei
 {
     Eigen::VectorXd adjustedTarget = targetPos;
     Eigen::VectorXd diff = targetPos-currentPos;
-    std::cout << "Diff: " << diff.transpose() << std::endl;
+    // std::cout << "Diff: " << diff.transpose() << std::endl;
     for(int i : continuous_joints)
     {
         if(abs(diff(i))>M_PI)
@@ -92,7 +91,7 @@ Eigen::VectorXd targetAdjustmentContinuousJoints(Eigen::VectorXd& currentPos, Ei
             }
         }
     }
-    std::cout << "Adjusted Target: " << adjustedTarget.transpose() << std::endl;
+    // std::cout << "Adjusted Target: " << adjustedTarget.transpose() << std::endl;
     return adjustedTarget;
 }
 
@@ -191,6 +190,7 @@ int main(int argc,char** argv)
     box.color.g = 0.95;
     box.color.b = 0.35;
     box.color.a = 1.0;
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     marker_pub->publish(box);
 
     //Add collision object to planning scecne
@@ -230,6 +230,7 @@ int main(int argc,char** argv)
             }
             else
             {
+            RCLCPP_INFO_STREAM(LOGGER, "****************************IK FOUND*******************"<<"\n");
             // time_point1 = std::chrono::high_resolution_clock::now();
             current_state.copyJointGroupPositions(joint_model_group,desired_state);
             collision_result.clear();
@@ -244,7 +245,7 @@ int main(int argc,char** argv)
                 collision_detection::CollisionResult::ContactMap::const_iterator it;
                 for (it = collision_result.contacts.begin(); it != collision_result.contacts.end(); ++it)
                 {
-                    RCLCPP_INFO(LOGGER, "Contact between: %s and %s", it->first.first.c_str(), it->first.second.c_str());
+                    // RCLCPP_INFO(LOGGER, "Contact between: %s and %s", it->first.first.c_str(), it->first.second.c_str());
                 }
                 //redo the traj gen process with the hope of getting one that works
                 new_target_pose = true;
@@ -273,7 +274,7 @@ int main(int argc,char** argv)
                     completion_time = round(completion_time/time_step)*time_step;
                 }
                 cubicFunc = findCubicFunction(latest_q, adjusted_target, latest_q_dot, completion_time);
-                RCLCPP_INFO_STREAM(LOGGER, "Cubic Function:\n" << cubicFunc << "\n");
+                // RCLCPP_INFO_STREAM(LOGGER, "Cubic Function:\n" << cubicFunc << "\n");
 
                 Eigen::VectorXd time_slices = Eigen::VectorXd::LinSpaced(completion_time/time_step,time_step,completion_time);
                 
@@ -287,7 +288,7 @@ int main(int argc,char** argv)
                     Eigen::Matrix<double,2,7> result;
                     result = time_matrix*cubicFunc;
                     //Check collision
-                    RCLCPP_INFO_STREAM(LOGGER, "Waypoint: "<< i <<" at Position: " << result << "\n");
+                    // RCLCPP_INFO_STREAM(LOGGER, "Waypoint: "<< i <<" at Position: " << result << "\n");
 
                     potential_state.setJointGroupPositions(joint_model_group,result.row(0));
                     collision_result.clear();

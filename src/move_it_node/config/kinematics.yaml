@@ -1,8 +1,8 @@
 
 manipulator:
   kinematics_solver: pick_ik/PickIkPlugin
-  kinematics_solver_timeout: 0.01 
-  kinematics_solver_attempts: 20
+  kinematics_solver_timeout: 0.03 
+  kinematics_solver_attempts: 40
   mode: global
   position_scale: 1.0
   rotation_scale: 0.5
@@ -10,7 +10,7 @@ manipulator:
   orientation_threshold: 0.01
   # was 0.05 before
   # was 0.005 before
-  cost_threshold: 0.006
+  cost_threshold: 0.008
   # minimal_displacement_weight: 0.005
-  minimal_displacement_weight: 0.01
+  minimal_displacement_weight: 0.015
   center_joints_weight: 0.001
