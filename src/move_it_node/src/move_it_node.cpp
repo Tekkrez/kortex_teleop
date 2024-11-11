@@ -25,6 +25,7 @@ std::vector<int> continuous_joints = {0,2,4,6};
 std::vector<int> non_continuous_joints = {1,3,5};
 Eigen::VectorXd latest_q(7);
 Eigen::VectorXd latest_q_dot(7);
+Eigen::VectorXd latest_q_dotdot(7);
 
 //Targets
 geometry_msgs::msg::PoseStamped target_pose;
@@ -41,16 +42,18 @@ bool new_joint_state = false;
 
 void jointState_Callback(const sensor_msgs::msg::JointState& msg)
 {
-
     new_joint_state = true;
     std::vector<double> positions;
     std::vector<double> velocities;
+    std::vector<double> accelerations;
 
     positions = msg.position;
     velocities = msg.velocity;
+    accelerations = msg.effort;
 
-    std::copy(positions.begin(),positions.end(),latest_q.data());
-    std::copy(velocities.begin(),velocities.end(),latest_q_dot.data());
+    std::copy(positions.begin(),positions.begin()+7,latest_q.data());
+    std::copy(velocities.begin(),velocities.begin()+7,latest_q_dot.data());
+    std::copy(accelerations.begin(),accelerations.begin()+7,latest_q_dotdot.data());
 }
 void targetPose_callback(const geometry_msgs::msg::PoseStamped& msg)
 {
@@ -266,27 +269,27 @@ int main(int argc,char** argv)
             {
                 //Reset flag
                 traj_gen_needed = false;
-                Eigen::Matrix <double,4,7> cubicFunc;
+                Eigen::Matrix <double,6,7> quinticFunc;
                 Eigen::VectorXd adjusted_target = targetAdjustmentContinuousJoints(latest_q,desired_q);
                 Eigen::VectorXd diff = adjusted_target-latest_q;
                 double completion_time = diff.cwiseAbs().maxCoeff()/soft_joint_speed_limit;
                 if(completion_time>time_step){
                     completion_time = round(completion_time/time_step)*time_step;
                 }
-                cubicFunc = findCubicFunction(latest_q, adjusted_target, latest_q_dot, completion_time);
-                // RCLCPP_INFO_STREAM(LOGGER, "Cubic Function:\n" << cubicFunc << "\n");
+                quinticFunc = findQuinticFunction(latest_q, adjusted_target, latest_q_dot, latest_q_dotdot,completion_time);
+                // RCLCPP_INFO_STREAM(LOGGER, "Cubic Function:\n" << quinticFunc << "\n");
 
                 Eigen::VectorXd time_slices = Eigen::VectorXd::LinSpaced(completion_time/time_step,time_step,completion_time);
                 
                 for (int i=0; i<time_slices.size();i++)
                 {
-                    Eigen::Matrix<double,2,4> time_matrix;
-                    time_matrix.row(0) <<  1,time_slices(i),pow(time_slices(i),2),pow(time_slices(i),3);
-                    time_matrix.row(1) <<  0,1,2*time_slices(i),3*pow(time_slices(i),2);
+                    Eigen::Matrix<double,2,6> time_matrix;
+                    time_matrix.row(0) <<  1,time_slices(i),pow(time_slices(i),2),pow(time_slices(i),3),pow(time_slices(i),4),pow(time_slices(i),5);
+                    time_matrix.row(1) <<  0,1,2*time_slices(i),3*pow(time_slices(i),2),4*pow(time_slices(i),3),5*pow(time_slices(i),4);
 
                     //Desired Joint vales at time slice
                     Eigen::Matrix<double,2,7> result;
-                    result = time_matrix*cubicFunc;
+                    result = time_matrix*quinticFunc;
                     //Check collision
                     // RCLCPP_INFO_STREAM(LOGGER, "Waypoint: "<< i <<" at Position: " << result << "\n");
 

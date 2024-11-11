@@ -1,8 +1,7 @@
-#include <robot_util.h>
+// #include <robot_util.h>
 #include <kortex_robot.h>
 #include <rclcpp/rclcpp.hpp>
 #include <math.h>
-#include <chrono>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 #include <geometry_msgs/msg/pose.hpp>
@@ -20,10 +19,9 @@ int traj_position = 0;
 Eigen::Matrix<double,1,7> next_joint_step;
 double target_time;
 Eigen::VectorXd time_slices;
-Eigen::Matrix<double,4,7> cubicFunc;
+// Eigen::Matrix<double,4,7> cubicFunc;
+Eigen::Matrix<double,6,7> quinticFunc;
 
-//Kortex_robot
-auto gen3_robot = kortex_robot();
 
 void traj_callback(const trajectory_msgs::msg::JointTrajectoryPoint& msg)
 {
@@ -47,9 +45,13 @@ int main(int argc, char** argv)
   gen3_control_node->declare_parameter("pos_pub_rate",60);
   gen3_control_node->declare_parameter("enable_send_position",true);
   gen3_control_node->declare_parameter("pub_test_positions",false);
+  gen3_control_node->declare_parameter("q_dot_alpha",0.1);
+  gen3_control_node->declare_parameter("q_dotdot_alpha",0.05);
   int pos_pub_rate = gen3_control_node->get_parameter("pos_pub_rate").as_int();
   bool enable_send_position = gen3_control_node->get_parameter("enable_send_position").as_bool();
   bool pub_test_positions = gen3_control_node->get_parameter("pub_test_positions").as_bool();
+  double q_dot_alpha = gen3_control_node->get_parameter("q_dot_alpha").as_double();
+  double q_dotdot_alpha = gen3_control_node->get_parameter("q_dotdot_alpha").as_double();
   //Joint state publisher
   rclcpp::QoS pub_qos(1);
   pub_qos.best_effort();
@@ -64,12 +66,16 @@ int main(int argc, char** argv)
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr joint_pos_test_pub;
   joint_pos_test_pub = gen3_control_node->create_publisher<std_msgs::msg::Float64MultiArray>("joint_pos_test",pub_qos);
 
+  //Kortex_robot
+  auto gen3_robot = kortex_robot(rate,q_dot_alpha,q_dotdot_alpha);
+
   gen3_robot.setLowLevelServoing();
   gen3_robot.getFeedback();
   gen3_robot.setBaseCommand();
   int pos_pub_period = hzToLoopNum(pos_pub_rate,rate);
   rclcpp::Rate loop_rate(rate);
   int i=0;
+
   while(rclcpp::ok())
   {
     i++;
@@ -81,15 +87,19 @@ int main(int argc, char** argv)
       traj_end_reached = false;
       traj_position = 0;
       time_slices = Eigen::VectorXd::LinSpaced(target_time*rate, 1/static_cast<double>(rate), target_time);
-      cubicFunc = findCubicFunction(gen3_robot.q,joint_pos_target,gen3_robot.q_dot,target_time);
+      // cubicFunc = findCubicFunction(gen3_robot.q,joint_pos_target,gen3_robot.q_dot,target_time);
+      //TODO: Decide between raw or filtered vel
+      quinticFunc = findQuinticFunction(gen3_robot.q,joint_pos_target,gen3_robot.q_dot_filtered,gen3_robot.q_dotdot,target_time);
     }
     //Get next joint position for timestep
     if(!traj_end_reached)
     {
+      //Update joint values
+      gen3_robot.checkFeedback();
       //Get desired Joint vales at time slice
-      Eigen::Matrix<double,1,4> time_matrix;
-      time_matrix <<  1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3);
-      next_joint_step = time_matrix*cubicFunc;
+      Eigen::Matrix<double,1,6> time_matrix;
+      time_matrix.row(0) <<  1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3),pow(time_slices(traj_position),4),pow(time_slices(traj_position),5);
+      next_joint_step = time_matrix*quinticFunc;
       if(enable_send_position)
       {
         //Send joint step
@@ -124,8 +134,6 @@ int main(int argc, char** argv)
 
     if(!(i%pos_pub_period))
     {
-      //TODO: Get rid of this check later
-      gen3_robot.checkFeedback();
       auto message = sensor_msgs::msg::JointState();
       //Fill in message
       message.header.stamp = gen3_control_node->now();
@@ -133,13 +141,21 @@ int main(int argc, char** argv)
 
       std::vector<double> out_pos = eigenToStdVec(degreesToRadians(gen3_robot.q));
       std::vector<double> out_vel = eigenToStdVec(degreesToRadians(gen3_robot.q_dot));
+      std::vector<double> out_acc = eigenToStdVec(degreesToRadians(gen3_robot.q_dotdot));
 
       out_pos.resize(13);
       out_vel.resize(13);
+      out_acc.resize(13);
       message.position = out_pos;
       message.velocity = out_vel;
+      message.effort = out_acc;
       //Publish
       joint_pub->publish(message);
+
+      //Pub joint_pos
+        auto test_message = std_msgs::msg::Float64MultiArray();
+        test_message.data = eigenToStdVec(degreesToRadians(gen3_robot.q_dot_filtered));
+        joint_pos_test_pub->publish(test_message);
       } 
     loop_rate.sleep(); 
   }

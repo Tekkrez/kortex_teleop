@@ -127,7 +127,7 @@ class VRManager : public rclcpp::Node
             ee_rot_adjustment.w() = 0.7071068;
             //Raise by 0.28 to align shoulder with robot shoulder
             ee_pos_adjustment << 0,0,0.28;
-            user_arm_length = 0.66;
+            user_arm_length = 0.75;
             //bit shoter that actual
             robot_arm_length = 0.85;
 

@@ -61,13 +61,13 @@ def generate_launch_description():
       'config',
       'gen3_control_node.yaml'
     )
-    # gen3_control_node = Node(
-    #     name="gen3_control_node",
-    #     package="gen3_control",
-    #     executable="gen3_control_test",
-    #     output="screen",
-    #     parameters=[gen3_control_config]
-    # )
+    gen3_control_node = Node(
+        name="gen3_control_node",
+        package="gen3_control",
+        executable="gen3_control_test",
+        output="screen",
+        parameters=[gen3_control_config]
+    )
 
     mode_it_node_config = os.path.join(
       get_package_share_directory('move_it_node'),
@@ -87,6 +87,6 @@ def generate_launch_description():
         rviz_node,
         robot_state_publisher_node,
         moveit_traj_node,
-        # gen3_control_node
+        gen3_control_node
         ]
     )

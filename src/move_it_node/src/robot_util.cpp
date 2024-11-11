@@ -1,7 +1,6 @@
 #include "robot_util.h"
 
 //Finds coefficients for a cubic function. End speed is set to be 0
-//TODO: Add ability for circular interpolation b/w 0/360 deg
 Eigen::Matrix<double,4,7> findCubicFunction(const Eigen::VectorXd& startPos,const Eigen::VectorXd& endPos,const Eigen::VectorXd& startSpeed,double endTime){
   Eigen::Matrix<double,4,4> timeMatrix;
   timeMatrix(0,Eigen::all) <<  1,0,0,0;
@@ -20,6 +19,32 @@ Eigen::Matrix<double,4,7> findCubicFunction(const Eigen::VectorXd& startPos,cons
   coeffs = timeMatrix.colPivHouseholderQr().solve(target);
   // std::cout<<"Solution: " <<coeffs<<std::endl;
 
+  return coeffs;
+}
+
+//Finds coefficients for a quintic function. End speed and acceleration is set to be 0
+Eigen::Matrix<double,6,7> findQuinticFunction(const Eigen::VectorXd& startPos,const Eigen::VectorXd& endPos,const Eigen::VectorXd& startSpeed,const Eigen::VectorXd& startAccel,double endTime)
+{
+  Eigen::Matrix<double,6,6> timeMatrix;
+  timeMatrix.row(0) <<  1,0,0,0,0,0;
+  timeMatrix.row(1) <<  0,1,0,0,0,0;
+  timeMatrix.row(2) <<  0,0,2,0,0,0;
+  timeMatrix.row(3) <<  1,endTime,pow(endTime,2),pow(endTime,3),pow(endTime,4),pow(endTime,5);
+  timeMatrix.row(4) <<  0,1,2*endTime,3*pow(endTime,2),4*pow(endTime,3),5*pow(endTime,4);
+  timeMatrix.row(5) <<  0,0,2,6*endTime,12*pow(endTime,2),20*pow(endTime,3);
+
+  Eigen::Matrix<double,6,7> target;
+  target.row(0) = startPos;
+  target.row(1) = startSpeed;
+  target.row(2) = startAccel;
+  target.row(3) = endPos;
+  target.row(4) = Eigen::VectorXd::Zero(7);
+  target.row(5) = Eigen::VectorXd::Zero(7);
+  // std::cout<<"Target: " <<target<<std::endl;
+
+  Eigen::Matrix<double,6,7> coeffs;
+  coeffs = timeMatrix.colPivHouseholderQr().solve(target);
+  // std::cout<<"Solution: " <<coeffs<<std::endl;
   return coeffs;
 }
 

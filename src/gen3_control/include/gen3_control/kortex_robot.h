@@ -20,6 +20,9 @@
 #include <unistd.h>
 #include <time.h>
 #include <cmath>
+// Custom include
+#include <chrono>
+#include <robot_util.h>
 
 
 
@@ -45,11 +48,19 @@ private:
 public:
     //Degrees
     Eigen::VectorXd q;
-    //Degrees
+    //Degrees/second
     Eigen::VectorXd q_dot;
+    Eigen::VectorXd q_dot_filtered;
+    //Degrees/second^2
+    Eigen::VectorXd q_dotdot;
+    Eigen::VectorXd prev_q_dot;
+    double period;
+    LowPassFilter vel_filt;
+    LowPassFilter accel_filt;
+
     std::vector<int> continuous_joints = {0,2,4,6};
     std::vector<int> non_continuous_joints = {1,3,5};
-    kortex_robot();
+    kortex_robot(int rate,double q_dot_alpha,double q_dotdot_alpha);
     ~kortex_robot();
     
     void kExceptionHandle(k_api::KDetailedException& ex);

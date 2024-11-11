@@ -34,7 +34,7 @@ void kortex_robot::setSingleLevelServoing(){
     low_level_servoing = false;
 }
 
-kortex_robot::kortex_robot(){
+kortex_robot::kortex_robot(int rate,double q_dot_alpha,double q_dotdot_alpha){
     auto error_callback = [](k_api::KError err){ cout << "_________ callback error _________" << err.toString(); };
 
     tcp_transport = new k_api::TransportClientTcp();
@@ -77,6 +77,12 @@ kortex_robot::kortex_robot(){
     }
     q.resize(7);
     q_dot.resize(7);
+    q_dotdot.resize(7);
+    q_dot_filtered.resize(7);
+    prev_q_dot=q_dot;
+    period = 1/static_cast<double>(rate);
+    accel_filt.lowPassFilterInit(Eigen::VectorXd(7), q_dotdot_alpha);    
+    vel_filt.lowPassFilterInit(Eigen::VectorXd(7), q_dot_alpha);
 }
 
 kortex_robot::~kortex_robot(){
@@ -132,6 +138,9 @@ bool kortex_robot::getFeedback()
         }
         q_dot(i) = base_feedback.actuators(i).velocity();
     }
+    q_dot_filtered = vel_filt.applyFilter(q_dot);
+    q_dotdot = accel_filt.applyFilter((q_dot_filtered-prev_q_dot)/(period));
+    prev_q_dot = q_dot_filtered;
     return true;    
 }
 
@@ -149,6 +158,11 @@ void kortex_robot::checkFeedback()
         }
         q_dot(i) = base_feedback.actuators(i).velocity();
     }
+    q_dot_filtered = vel_filt.applyFilter(q_dot);
+    std::cout << "new_vel: " << q_dot_filtered.transpose()<< std::endl;
+    std::cout << "q_dotdot: " << ((q_dot_filtered-prev_q_dot)/(period)).transpose() << std::endl;
+    q_dotdot = accel_filt.applyFilter((q_dot_filtered-prev_q_dot)/(period));
+    prev_q_dot=q_dot_filtered;
 }
 //Initializes base_command. Calls getFeedback() first
 bool kortex_robot::setBaseCommand()

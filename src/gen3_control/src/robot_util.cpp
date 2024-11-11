@@ -44,6 +44,32 @@ Eigen::Matrix<double,4,7> findCubicFunction(const Eigen::VectorXd& startPos,cons
   return coeffs;
 }
 
+//Finds coefficients for a quintic function. End speed and acceleration is set to be 0
+Eigen::Matrix<double,6,7> findQuinticFunction(const Eigen::VectorXd& startPos,const Eigen::VectorXd& endPos,const Eigen::VectorXd& startSpeed,const Eigen::VectorXd& startAccel,double endTime)
+{
+  Eigen::Matrix<double,6,6> timeMatrix;
+  timeMatrix.row(0) <<  1,0,0,0,0,0;
+  timeMatrix.row(1) <<  0,1,0,0,0,0;
+  timeMatrix.row(2) <<  0,0,2,0,0,0;
+  timeMatrix.row(3) <<  1,endTime,pow(endTime,2),pow(endTime,3),pow(endTime,4),pow(endTime,5);
+  timeMatrix.row(4) <<  0,1,2*endTime,3*pow(endTime,2),4*pow(endTime,3),5*pow(endTime,4);
+  timeMatrix.row(5) <<  0,0,2,6*endTime,12*pow(endTime,2),20*pow(endTime,3);
+
+  Eigen::Matrix<double,6,7> target;
+  target.row(0) = startPos;
+  target.row(1) = startSpeed;
+  target.row(2) = startAccel;
+  target.row(3) = endPos;
+  target.row(4) = Eigen::VectorXd::Zero(7);
+  target.row(5) = Eigen::VectorXd::Zero(7);
+  // std::cout<<"Target: " <<target<<std::endl;
+
+  Eigen::Matrix<double,6,7> coeffs;
+  coeffs = timeMatrix.colPivHouseholderQr().solve(target);
+  // std::cout<<"Solution: " <<coeffs<<std::endl;
+  return coeffs;
+}
+
 //Create cubic smooth trajectory using start and position for each of the joints
 //Soft speed limit is used to determine time to complete trajectory
 Eigen::MatrixXd createTrajectory(const Eigen::VectorXd& start_position,const Eigen::VectorXd& end_position,const Eigen::VectorXd& start_speed,double soft_joint_speed_limit,double time_step)
@@ -103,5 +129,29 @@ Eigen::VectorXd stdVecToEigen(const std::vector<double>& vec)
 int hzToLoopNum(const int& hz, const int& loopRate)
 {
   return static_cast<int>(round(loopRate/hz));
+}
+
+//Initialize or reset filter
+void LowPassFilter::lowPassFilterInit(const Eigen::VectorXd& initVector, const double& alpha_init)
+{
+  this->alpha = alpha_init;
+  this->value_container = initVector;
+};
+
+Eigen::VectorXd LowPassFilter::applyFilter(const Eigen::VectorXd& new_vector)
+{
+  Eigen::VectorXd filteredVector(new_vector.size());
+  filteredVector = new_vector * this->alpha + (1 - this->alpha) * this->value_container;
+  this->value_container = filteredVector;
+  return filteredVector;
+}
+
+Eigen::VectorXd LowPassFilter::applyFilterTimeScaled(const Eigen::VectorXd& new_vector,const double& time_delta,const double& min_alpha,const double& max_alpha_time)
+{  
+  Eigen::VectorXd filteredVector(new_vector.size());
+  double t_alpha = (1-min_alpha)*std::tanh(2*time_delta/max_alpha_time)+min_alpha;
+  filteredVector = new_vector * t_alpha + (1 - t_alpha) * this->value_container;
+  this->value_container = filteredVector;
+  return filteredVector;
 }
 

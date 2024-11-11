@@ -19,7 +19,7 @@ int traj_position = 0;
 Eigen::Matrix<double,1,7> next_joint_step;
 double target_time;
 Eigen::VectorXd time_slices;
-Eigen::Matrix<double,4,7> cubicFunc;
+Eigen::Matrix<double,6,7> quinticFunc;
 
 void traj_callback(const trajectory_msgs::msg::JointTrajectoryPoint& msg)
 {
@@ -68,6 +68,10 @@ int main(int argc, char** argv)
   gen3_q_dot_sim << 0,0,0,0,0,0,0;
   Eigen::VectorXd gen3_q_dotdot_sim(7);
   gen3_q_dotdot_sim << 0,0,0,0,0,0,0;
+  Eigen::VectorXd prev_q_dot = gen3_q_dot_sim;
+
+  LowPassFilter accel_filt;
+  accel_filt.lowPassFilterInit(gen3_q_dotdot_sim,1.0);
 
   while(rclcpp::ok())
   {
@@ -80,18 +84,18 @@ int main(int argc, char** argv)
       traj_end_reached = false;
       traj_position = 0;
       time_slices = Eigen::VectorXd::LinSpaced(target_time*rate, 1/static_cast<double>(rate), target_time);
-      cubicFunc = findCubicFunction(gen3_q_sim,joint_pos_target,gen3_q_dot_sim,target_time);
-    }
+      quinticFunc = findQuinticFunction(gen3_q_sim,joint_pos_target,gen3_q_dot_sim,gen3_q_dotdot_sim,target_time);
+    } 
     //Get next joint position for timestep
     if(!traj_end_reached)
     {
       //Get desired Joint vales at time slice
       //Get velocity
-      Eigen::Matrix<double,2,4> time_matrix;
-      time_matrix.row(0) <<  1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3);
-      time_matrix.row(1) << 0,1,2*time_slices(traj_position),3*pow(time_slices(traj_position),2);
+      Eigen::Matrix<double,2,6> time_matrix;
+      time_matrix.row(0) <<  1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3),pow(time_slices(traj_position),4),pow(time_slices(traj_position),5);
+      time_matrix.row(1) << 0,1,2*time_slices(traj_position),3*pow(time_slices(traj_position),2),4*pow(time_slices(traj_position),3),5*pow(time_slices(traj_position),4);
       Eigen::Matrix<double,2,7> result;
-      result = time_matrix*cubicFunc;
+      result = time_matrix*quinticFunc;
       // std::cout<<"Result: " << result.row(0) << " Result vel :" << result.row(1) <<"\n";
       std::vector<double> pos_command;
       pos_command = eigenToStdVec(result.row(0).transpose());
@@ -106,6 +110,8 @@ int main(int argc, char** argv)
       //Update sim position assuming perfect tracking
       gen3_q_sim = stdVecToEigen(pos_command);
       gen3_q_dot_sim = result.row(1).transpose();
+      gen3_q_dotdot_sim = accel_filt.applyFilter((gen3_q_dot_sim-prev_q_dot)/(1/static_cast<double>(rate)));
+      prev_q_dot = gen3_q_dot_sim;
       //Check if end of time slice
       traj_position++;
       if(traj_position == time_slices.size())
@@ -123,13 +129,16 @@ int main(int argc, char** argv)
       
       std::vector<double> out_pos = eigenToStdVec(degreesToRadians(gen3_q_sim));
       std::vector<double> out_vel = eigenToStdVec(degreesToRadians(gen3_q_dot_sim));
+      std::vector<double> out_acc = eigenToStdVec(degreesToRadians(gen3_q_dotdot_sim));
       out_pos.resize(13);
       out_vel.resize(13);
+      out_acc.resize(13);
       message.position = out_pos;
       message.velocity = out_vel;
+      message.effort = out_acc;
       //Publish
       joint_pub->publish(message);
-      } 
+      }
 
     loop_rate.sleep(); 
   }
