@@ -32,13 +32,16 @@ geometry_msgs::msg::PoseStamped target_pose;
 std::vector<double> desired_state;
 Eigen::VectorXd desired_q(7);
 Eigen::Isometry3d prevPose;
+
 //params
 double soft_joint_speed_limit,time_step,linear_distance_thresh,angular_distance_thresh;
-
+double starting_displacement_weight,large_delta_thresh,large_delta_weight,medium_delta_thresh,medium_delta_weight;
 // Flags
 bool new_target_pose = false;
 bool traj_gen_needed = false;
 bool new_joint_state = false;
+bool large_delta_pose = false;
+bool medium_delta_pose = false;
 
 void jointState_Callback(const sensor_msgs::msg::JointState& msg)
 {
@@ -67,10 +70,21 @@ void targetPose_callback(const geometry_msgs::msg::PoseStamped& msg)
     //Update target pose if different enough
     if(linear_distance>linear_distance_thresh || std::abs(angular_distance)>angular_distance_thresh)
     {
+        std::cout<<"Target different enough || "<< "linear distance: " << linear_distance<<" angular distance: " <<std::abs(angular_distance) <<std::endl;
+        std::cout<<"Target different enough || "<< "Cost val" << linear_distance + 0.5 * std::abs(angular_distance) <<std::endl;
+        double delta_pose_cost = linear_distance + 0.5 * std::abs(angular_distance);
+        large_delta_pose =  delta_pose_cost >= large_delta_thresh;
+        medium_delta_pose = delta_pose_cost < medium_delta_thresh && delta_pose_cost >= medium_delta_thresh;
         target_pose = msg;
         prevPose = desPose;
         new_target_pose = true;
     }
+    //TODO: Possible edge cases opened up here
+    else
+    {
+        new_target_pose = false;
+    }
+    
 }
 
 Eigen::VectorXd targetAdjustmentContinuousJoints(Eigen::VectorXd& currentPos, Eigen::VectorXd& targetPos)
@@ -132,6 +146,11 @@ int main(int argc,char** argv)
     time_step = traj_pub_node->get_parameter("time_step").as_double();
     linear_distance_thresh = traj_pub_node->get_parameter("linear_distance_thresh").as_double();
     angular_distance_thresh = traj_pub_node->get_parameter("angular_distance_thresh").as_double();
+    starting_displacement_weight = traj_pub_node->get_parameter("robot_description_kinematics.manipulator.minimal_displacement_weight").as_double();
+    large_delta_thresh = traj_pub_node->get_parameter("large_delta_thresh").as_double();
+    large_delta_weight = traj_pub_node->get_parameter("large_delta_weight").as_double();
+    medium_delta_thresh = traj_pub_node->get_parameter("medium_delta_thresh").as_double();
+    medium_delta_weight = traj_pub_node->get_parameter("medium_delta_weight").as_double();
     
     //Subscribers
     rclcpp::QoS sub_qos(1);
@@ -173,7 +192,7 @@ int main(int argc,char** argv)
     box_pose.orientation.w = 1.0;
     box_pose.position.x = 0.8;
     box_pose.position.y = -0.3;
-    box_pose.position.z = -0.14;//3 cm extra offset since robot is sitting on two plates
+    box_pose.position.z = -0.13;//3.5 cm extra offset since robot is sitting on two plates
     collision_object.primitives.push_back(primitive);
     collision_object.primitive_poses.push_back(box_pose);
     collision_object.operation = collision_object.ADD;
@@ -223,48 +242,69 @@ int main(int argc,char** argv)
             //Reset flag
             new_target_pose = false;
             new_joint_state = false;
-            //Update current Joint State
+            //Update current Joint State and potential state
             current_state.setJointGroupPositions(joint_model_group,latest_q);
-            if(!current_state.setFromIK(joint_model_group,target_pose.pose,"end_effector_link",0.0))
+            potential_state.setJointGroupPositions(joint_model_group,latest_q);
+            //Change minimal_displacement_weight
+            if(large_delta_pose)
             {
+                traj_pub_node->set_parameter(rclcpp::Parameter("robot_description_kinematics.manipulator.minimal_displacement_weight",large_delta_weight));
+            }
+            else if(medium_delta_pose) 
+            {
+                traj_pub_node->set_parameter(rclcpp::Parameter("robot_description_kinematics.manipulator.minimal_displacement_weight",medium_delta_weight));
+            }
+            
+            if(!potential_state.setFromIK(joint_model_group,target_pose.pose,"end_effector_link",0.0))
+            {
+                //Restore prevPose for new pose requests
+                prevPose = current_state.getGlobalLinkTransform("end_effector_link");
                 RCLCPP_WARN_STREAM(LOGGER, "IK not found"<<"\n");
                 //redo the traj gen process with the hope of getting one that works
                 new_target_pose = true;
             }
             else
             {
-            RCLCPP_INFO_STREAM(LOGGER, "****************************IK FOUND*******************"<<"\n");
-            // time_point1 = std::chrono::high_resolution_clock::now();
-            current_state.copyJointGroupPositions(joint_model_group,desired_state);
-            collision_result.clear();
-            potential_state.setJointGroupPositions(joint_model_group,desired_state);
-            planning_scene.checkCollision(collision_request, collision_result, potential_state);
-            // auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()-time_point1);
-            // RCLCPP_INFO_STREAM(LOGGER, "Collision detection time: "<< elapsed.count() <<"\n");
+                RCLCPP_INFO_STREAM(LOGGER, "****************************IK FOUND*******************"<<"\n");
+                // time_point1 = std::chrono::high_resolution_clock::now();
+                potential_state.copyJointGroupPositions(joint_model_group,desired_state);
+                collision_result.clear();
+                planning_scene.checkCollision(collision_request, collision_result, potential_state);
+                // auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()-time_point1);
+                // RCLCPP_INFO_STREAM(LOGGER, "Collision detection time: "<< elapsed.count() <<"\n");
 
-            if(collision_result.collision)
-            {
-                RCLCPP_WARN_STREAM(LOGGER, "The robot IK solution would cause a collision"<<"\n");
-                collision_detection::CollisionResult::ContactMap::const_iterator it;
-                for (it = collision_result.contacts.begin(); it != collision_result.contacts.end(); ++it)
+                if(collision_result.collision)
                 {
-                    // RCLCPP_INFO(LOGGER, "Contact between: %s and %s", it->first.first.c_str(), it->first.second.c_str());
+                    //Restore prevPose for new pose requests
+                    prevPose = current_state.getGlobalLinkTransform("end_effector_link");
+
+                    RCLCPP_WARN_STREAM(LOGGER, "The robot IK solution would cause a collision"<<"\n");
+                    collision_detection::CollisionResult::ContactMap::const_iterator it;
+                    for (it = collision_result.contacts.begin(); it != collision_result.contacts.end(); ++it)
+                    {
+                        // RCLCPP_INFO(LOGGER, "Contact between: %s and %s", it->first.first.c_str(), it->first.second.c_str());
+                    }
+                    //redo the traj gen process with the hope of getting one that works
+                    new_target_pose = true;
                 }
-                //redo the traj gen process with the hope of getting one that works
-                new_target_pose = true;
-            }
-            else
-            {
-                std::copy(desired_state.begin(), desired_state.end(), desired_q.data());
-                traj_gen_needed = true;
-            }
-            // desired_q = vectorFMod(desired_q);
-            RCLCPP_INFO_STREAM(LOGGER,"Target_position: " << desired_q.transpose() << "\n");
-            // Eigen::Isometry3d end_effector_state = current_state.getGlobalLinkTransform("half_arm_2_link");
-            // RCLCPP_INFO_STREAM(LOGGER,"Translation: \n" << end_effector_state.translation()<<"\n");
-            // RCLCPP_INFO_STREAM(LOGGER,"Rotation: \n" << end_effector_state.rotation()<<"\n");
+                else
+                {
+                    std::copy(desired_state.begin(), desired_state.end(), desired_q.data());
+                    traj_gen_needed = true;
+                }
+                RCLCPP_INFO_STREAM(LOGGER,"Target_position: " << desired_q.transpose() << "\n");
             }
         
+            if(large_delta_pose)
+            {
+                large_delta_pose = false;
+                traj_pub_node->set_parameter(rclcpp::Parameter("robot_description_kinematics.manipulator.minimal_displacement_weight",starting_displacement_weight));
+            }
+            else if(medium_delta_pose) 
+            {
+                medium_delta_pose = false;
+                traj_pub_node->set_parameter(rclcpp::Parameter("robot_description_kinematics.manipulator.minimal_displacement_weight",starting_displacement_weight));
+            }
             if(traj_gen_needed)
             {
                 //Reset flag

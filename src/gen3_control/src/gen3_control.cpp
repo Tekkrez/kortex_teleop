@@ -139,8 +139,9 @@ int main(int argc, char** argv)
       message.header.stamp = gen3_control_node->now();
       message.name = joint_names;
 
+      //TODO: Changed to send filtered velocity instead
       std::vector<double> out_pos = eigenToStdVec(degreesToRadians(gen3_robot.q));
-      std::vector<double> out_vel = eigenToStdVec(degreesToRadians(gen3_robot.q_dot));
+      std::vector<double> out_vel = eigenToStdVec(degreesToRadians(gen3_robot.q_dot_filtered));
       std::vector<double> out_acc = eigenToStdVec(degreesToRadians(gen3_robot.q_dotdot));
 
       out_pos.resize(13);
@@ -154,7 +155,7 @@ int main(int argc, char** argv)
 
       //Pub joint_pos
         auto test_message = std_msgs::msg::Float64MultiArray();
-        test_message.data = eigenToStdVec(degreesToRadians(gen3_robot.q_dot_filtered));
+        test_message.data = eigenToStdVec(degreesToRadians(gen3_robot.q_dot));
         joint_pos_test_pub->publish(test_message);
       } 
     loop_rate.sleep(); 

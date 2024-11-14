@@ -4,4 +4,10 @@
     soft_joint_speed_limit: 0.4
     time_step: 0.1
     linear_distance_thresh: 0.005
-    angular_distance_thresh: 0.01
+    angular_distance_thresh: 0.05
+    # Thresholds to determine if minimum delta weight should be adjusted
+    large_delta_thresh: 1.2
+    medium_delta_thresh: 0.4
+    # Minimal delta weight if gap delta pose is large or medium
+    large_delta_weight: 0.01
+    medium_delta_weight: 0.015

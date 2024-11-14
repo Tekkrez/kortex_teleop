@@ -159,8 +159,6 @@ void kortex_robot::checkFeedback()
         q_dot(i) = base_feedback.actuators(i).velocity();
     }
     q_dot_filtered = vel_filt.applyFilter(q_dot);
-    std::cout << "new_vel: " << q_dot_filtered.transpose()<< std::endl;
-    std::cout << "q_dotdot: " << ((q_dot_filtered-prev_q_dot)/(period)).transpose() << std::endl;
     q_dotdot = accel_filt.applyFilter((q_dot_filtered-prev_q_dot)/(period));
     prev_q_dot=q_dot_filtered;
 }
