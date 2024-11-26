@@ -60,6 +60,7 @@ public:
 
     std::vector<int> continuous_joints = {0,2,4,6};
     std::vector<int> non_continuous_joints = {1,3,5};
+    double joint_lim = 2.23;
     kortex_robot(int rate,double q_dot_alpha,double q_dotdot_alpha);
     ~kortex_robot();
     
@@ -72,5 +73,6 @@ public:
     void checkFeedback();
 
     bool sendPosition(const Eigen::VectorXd& desired_q_step);
+    bool sendVelocity(const Eigen::VectorXd& desired_vel);
     bool setBaseCommand();
 };

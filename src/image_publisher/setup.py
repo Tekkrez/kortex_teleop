@@ -22,7 +22,7 @@ setup(
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
-        'console_scripts': ["imgage_publisher = image_publisher.image_publisher_node:main"
+        'console_scripts': ["image_publisher = image_publisher.image_publisher_node:main"
         ],
     },
 )

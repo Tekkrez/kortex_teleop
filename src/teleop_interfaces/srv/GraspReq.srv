@@ -1,0 +1,5 @@
+# Custom service to request grasp poses from a given point cloud
+sensor_msgs/PointCloud2 point_cloud
+---
+geometry_msgs/Pose[] grasp_poses
+float32[] grasp_scores

@@ -5,7 +5,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     imagePublisher = Node(
                 package="image_publisher",
-                executable="imgage_publisher"
+                executable="image_publisher"
             )
     compressImage = Node(
                 package="image_transport",

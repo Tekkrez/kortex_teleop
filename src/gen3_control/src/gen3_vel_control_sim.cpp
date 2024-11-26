@@ -5,28 +5,35 @@
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+//TODO: Get rid of this
 #include <std_msgs/msg/float64_multi_array.hpp>
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("gen3_control_node");
 std::vector<std::string> joint_names = { "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7", "robotiq_85_right_knuckle_joint",
 "robotiq_85_left_inner_knuckle_joint","robotiq_85_right_inner_knuckle_joint" ,"robotiq_85_left_finger_tip_joint","robotiq_85_right_finger_tip_joint","robotiq_85_left_knuckle_joint"};
 //Loop rate var
 int rate = 1100;
+double period=1/static_cast<double>(rate);
 //Variables for trajectory tracking
-Eigen::VectorXd joint_pos_target;
-bool new_trajectory = false;
-bool traj_end_reached = true;
+Eigen::VectorXd joint_vel_target;
+bool new_velocity = false;
+bool vel_target_reached = true;
 int traj_position = 0;
-Eigen::Matrix<double,1,7> next_joint_step;
-double target_time;
+//Soft accel limit
+double soft_accel_limit = 35;
+//Need to adjust the rest
+Eigen::Matrix<double,1,7> next_joint_vel;
 Eigen::VectorXd time_slices;
-Eigen::Matrix<double,6,7> quinticFunc;
+Eigen::Matrix<double,4,7> cubic_func;
+Eigen::VectorXd vel_command(7);
+
+std::vector<int> continuous_joints = {0,2,4,6};
+std::vector<int> non_continuous_joints = {1,3,5};
+double joint_lim = 2.23;
 
 void traj_callback(const trajectory_msgs::msg::JointTrajectoryPoint& msg)
 {
-  rclcpp::Duration time_to_first_point(msg.time_from_start.sec,msg.time_from_start.nanosec);
-  target_time = time_to_first_point.seconds();
-  joint_pos_target = radiansToDegrees(stdVecToEigen(msg.positions));
-  new_trajectory = true;
+  joint_vel_target = radiansToDegrees(stdVecToEigen(msg.velocities));
+  new_velocity = true;
 }
 
 int main(int argc, char** argv)
@@ -76,52 +83,70 @@ int main(int argc, char** argv)
   while(rclcpp::ok())
   {
     i++;
-    //Check for new message
-    if(new_trajectory)
+    //Check for new message and smoothly vary velocity (may not be neccesary)
+    if(new_velocity)
     {
-    //RCLCPP_WARN_STREAM(LOGGER, "Here 1"<<"\n");
-      new_trajectory=false;
-      traj_end_reached = false;
+      // Reset flags and position counter
+      new_velocity=false;
+      vel_target_reached = false;
       traj_position = 0;
-      time_slices = Eigen::VectorXd::LinSpaced(target_time*rate, 1/static_cast<double>(rate), target_time);
-      quinticFunc = findQuinticFunction(gen3_q_sim,joint_pos_target,gen3_q_dot_sim,gen3_q_dotdot_sim,target_time);
+      double completion_time = (joint_vel_target-gen3_q_dot_sim).cwiseAbs().maxCoeff()/soft_accel_limit;
+      // if(completion_time>period){
+      //     completion_time = round(completion_time/period)*period;
+      // }
+      time_slices = Eigen::VectorXd::LinSpaced(completion_time*rate, period, completion_time);
+      cubic_func = findCubicFunction(gen3_q_dot_sim,joint_vel_target,gen3_q_dotdot_sim,completion_time);
+      
     } 
-    //Get next joint position for timestep
-    if(!traj_end_reached)
+    //Get to target velocity for timestep
+    //TODO: Need timing mechanism to ensure it doesn't spin forever. Should tie it in with completion time and collision detection
+    if(!vel_target_reached)
     {
       //Get desired Joint vales at time slice
       //Get velocity
-      Eigen::Matrix<double,2,6> time_matrix;
-      time_matrix.row(0) <<  1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3),pow(time_slices(traj_position),4),pow(time_slices(traj_position),5);
-      time_matrix.row(1) << 0,1,2*time_slices(traj_position),3*pow(time_slices(traj_position),2),4*pow(time_slices(traj_position),3),5*pow(time_slices(traj_position),4);
+      Eigen::Matrix<double,2,4> time_matrix;
+      time_matrix.row(0) << 1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3);
+      time_matrix.row(1) << 0,1,2*time_slices(traj_position),3*pow(time_slices(traj_position),2);
       Eigen::Matrix<double,2,7> result;
-      result = time_matrix*quinticFunc;
-      // std::cout<<"Result: " << result.row(0) << " Result vel :" << result.row(1) <<"\n";
-      std::vector<double> pos_command;
-      pos_command = eigenToStdVec(result.row(0).transpose());
-      for(int i =0;i<gen3_q_sim.size();i++)
+      result = time_matrix*cubic_func;
+      vel_command = result.row(0).transpose();
+    }
+    //Simulate command
+    //Update sim position assuming perfect tracking
+    //Go through continuous joints
+    Eigen::VectorXd delta_pos = vel_command * period; 
+    for(auto & joint : continuous_joints)
+    {
+        gen3_q_sim(joint)=fmod(gen3_q_sim(joint)+delta_pos(joint),360.0);
+    }
+
+    // Non continuous joints
+    for(auto & joint : non_continuous_joints)
+    {
+      if(abs(gen3_q_sim(joint)+delta_pos(joint))>joint_lim)
       {
-        pos_command[i] = fmod(pos_command[i],360.0);
-        if(pos_command[i]>180)
-        {
-          pos_command[i] = pos_command[i]-360;
-        }
+        // std::cout<<"JOINT LIMIT EXECEDED FOR JOINT " << joint << std::endl;
+        vel_command(joint) = 0;
       }
-      //Update sim position assuming perfect tracking
-      gen3_q_sim = stdVecToEigen(pos_command);
-      gen3_q_dot_sim = result.row(1).transpose();
-      gen3_q_dotdot_sim = accel_filt.applyFilter((gen3_q_dot_sim-prev_q_dot)/(1/static_cast<double>(rate)));
-      prev_q_dot = gen3_q_dot_sim;
-      //Check if end of time slice
+      else
+      {
+        gen3_q_sim(joint)=fmod(gen3_q_sim(joint)+delta_pos(joint),360.0);
+      }
+    }
+    gen3_q_dot_sim = vel_command;
+    gen3_q_dotdot_sim = accel_filt.applyFilter((gen3_q_dot_sim-prev_q_dot)/(period));
+    prev_q_dot = gen3_q_dot_sim;
+    if(!vel_target_reached){
       traj_position++;
-      if(traj_position == time_slices.size())
-      {
-        traj_end_reached = true;
-      }
+    }
+    if(traj_position == time_slices.size())
+    {
+      vel_target_reached = true;
     }
     if(!(i%pos_pub_period))
     {
-      //TODO: Get rid of this check later
+      // std::cout << "delta_pos" << vel_command << std::endl;
+      // std::cout << "delta_pos" << delta_pos << std::endl;
       auto message = sensor_msgs::msg::JointState();
       //Fill in message
       message.header.stamp = gen3_control_node->now();
@@ -138,7 +163,7 @@ int main(int argc, char** argv)
       message.effort = out_acc;
       //Publish
       joint_pub->publish(message);
-      }
+    }
 
     loop_rate.sleep(); 
   }

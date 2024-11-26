@@ -1,9 +1,8 @@
-import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 from moveit_configs_utils import MoveItConfigsBuilder
-
+import os
 def generate_launch_description():
 
     launch_arguments = {
@@ -37,12 +36,13 @@ def generate_launch_description():
     parameters=[moveit_config.robot_description,
                 moveit_config.robot_description_semantic,
                 moveit_config.robot_description_kinematics],
-    )    
+    )
 
     rviz_config_file = (
         get_package_share_directory("move_it_node")
         + "/config/view_kortex_robot.rviz"
     )
+
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
@@ -56,37 +56,25 @@ def generate_launch_description():
         ]
     )
 
-    gen3_control_config = os.path.join(
-      get_package_share_directory('gen3_control'),
-      'config',
-      'gen3_control_node.yaml'
-    )
-    gen3_control_node = Node(
-        name="gen3_control_node",
-        package="gen3_control",
-        executable="gen3_control",
-        output="screen",
-        parameters=[gen3_control_config]
-    )
-
     move_it_node_config = os.path.join(
       get_package_share_directory('move_it_node'),
       'config',
       'move_it_node.yaml'
     )
+
     moveit_traj_node = Node(
         name="move_it_node",
         package="move_it_node",
-        executable="move_it_node",
+        executable="move_it_vel_control_node",
         output="screen",
         emulate_tty=True,
         parameters=[moveit_config.to_dict(),move_it_node_config],
+    
     )
     
     return LaunchDescription([
         rviz_node,
         robot_state_publisher_node,
-        moveit_traj_node,
-        gen3_control_node
+        moveit_traj_node
         ]
     )

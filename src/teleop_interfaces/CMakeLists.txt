@@ -7,15 +7,17 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
-rosidl_generate_interfaces(custom_teleop_messages
+rosidl_generate_interfaces(teleop_interfaces
   "msg/XRPose.msg"
-  DEPENDENCIES geometry_msgs
+  "srv/GraspReq.srv"
+  DEPENDENCIES builtin_interfaces geometry_msgs sensor_msgs
 )
 
-ament_export_dependencies(rosidl_default_runtime)
+# ament_export_dependencies(rosidl_default_runtime)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

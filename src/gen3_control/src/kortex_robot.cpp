@@ -214,3 +214,56 @@ bool kortex_robot::sendPosition(const Eigen::VectorXd& desired_q_step)
         return false;
     }
 }
+//Converts velocity to position using rate
+//Assumes default control mode of position
+//Need to be called after refreshFeedback and after base_command is set
+bool kortex_robot::sendVelocity(const Eigen::VectorXd& desired_vel)
+{
+    if(!low_level_servoing)
+    {
+        return false;
+    }
+    try
+    {
+        //Delta Position
+        Eigen::VectorXd delta_pos = desired_vel * period;
+        //Get new frame ID
+        base_command.set_frame_id(base_command.frame_id() + 1);;
+        if(base_command.frame_id()>65535)
+        {
+            base_command.set_frame_id(0);
+        }
+        // Go through continuous joints
+        for(auto & joint : continuous_joints)
+        {
+            base_command.mutable_actuators(joint)->set_position(fmod(q(joint)+delta_pos(joint),360.0));
+            base_command.mutable_actuators(joint)->set_command_id(base_command.frame_id());
+        }
+        // Non continuous joints
+        for(auto & joint : non_continuous_joints)
+        {
+            if(abs(q(joint)+delta_pos(joint))>joint_lim)
+            {
+                std::cout<<"JOINT LIMIT EXECEDED FOR JOINT " << joint << std::endl;
+                return false;
+            }
+            else
+            {
+                base_command.mutable_actuators(joint)->set_position(fmod(q(joint)+delta_pos(joint),360.0));
+                base_command.mutable_actuators(joint)->set_command_id(base_command.frame_id());
+            }
+        }
+        base_feedback = base_cyclic->Refresh(base_command,0);
+        return true;
+    }
+    catch(k_api::KDetailedException& ex)
+    {
+        kExceptionHandle(ex);
+        return false;
+    }
+    catch(std::runtime_error& ex2)
+    {
+        stdExceptionHandle(ex2);
+        return false;
+    }
+}
