@@ -202,46 +202,33 @@ int main(int argc,char** argv)
             new_joint_state = false;
             //Update current Joint State and potential state
             current_state.setJointGroupPositions(joint_model_group,latest_q);
-            Eigen::Isometry3d current_pose =current_state.getGlobalLinkTransform("end_effector_link");
-            //Determine if new pose is different enough from current pose
-            Eigen::Isometry3d delta_pose = current_pose.inverse()*target_pose;
-            Eigen::AngleAxisd angle_axis(delta_pose.rotation());
+            const Eigen::Isometry3d current_pose = current_state.getGlobalLinkTransform("end_effector_link");
+            const Eigen::Quaterniond current_orientation(current_pose.rotation());
+            const Eigen::Quaterniond target_orientation(target_pose.rotation());
+            const Eigen::AngleAxisd orientation_error(target_orientation*current_orientation.inverse());
+            const Eigen::Vector3d position_error(target_pose.translation()-current_pose.translation());
             Eigen::Vector3d omega;
+
             //Update output velocity if different enough
-            if(delta_pose.translation().norm()>linear_distance_thresh || std::abs(angle_axis.angle())>angular_distance_thresh)
+            if(position_error.norm()>linear_distance_thresh || std::abs(orientation_error.angle())>angular_distance_thresh)
             {
-                if(delta_pose.translation().norm()>linear_distance_thresh && std::abs(angle_axis.angle())>angular_distance_thresh)
-                {
-                }
-                else if(delta_pose.translation().norm()>linear_distance_thresh)
-                {
-                    std::cout <<"NEED TO ONLY ADJUST Position" <<std::endl;
-                }
-                else if (std::abs(angle_axis.angle())>angular_distance_thresh)
-                {
-                    std::cout <<"NEED TO ONLY ADJUST Orientation" <<std::endl;
-                }
+                // if(position_error.norm()>linear_distance_thresh && std::abs(orientation_error.angle())>angular_distance_thresh)
+                // {
+                // }
+                // else if(position_error.norm()>linear_distance_thresh)
+                // {
+                //     std::cout <<"NEED TO ONLY ADJUST Position" <<std::endl;
+                // }
+                // else if (std::abs(orientation_error.angle())>angular_distance_thresh)
+                // {
+                //     std::cout <<"NEED TO ONLY ADJUST Orientation" <<std::endl;
+                // }
 
-                potential_state.setJointGroupPositions(joint_model_group,latest_q);
-                if(abs(angle_axis.angle())<M_PI)
-                {
-                    omega = angle_axis.angle()*angle_axis.axis();
-                }
-                else if(angle_axis.angle()<=-M_PI)
-                {
-
-                    std::cout <<"Adjusting omega 1" <<std::endl;
-                    omega = (2*M_PI+angle_axis.angle())*angle_axis.axis();
-                }
-                else if(angle_axis.angle()>=M_PI)
-                {
-
-                    std::cout <<"Adjusting omega 2" <<std::endl;
-                    omega = (-2*M_PI+angle_axis.angle())*angle_axis.axis();
-                }
+                //Assert act as a check, likely uneccesary since Eigen should take care of this when creating the angle axis object
+                assert(abs(orientation_error.angle())<=M_PI);
+                omega = orientation_error.angle()*orientation_error.axis();
+                //Find twists from pose errors
                 Eigen::VectorXd twists(6);
-
-                twists << (target_pose.translation()-current_pose.translation()),Eigen::Vector3d::Zero();
                 twists << (target_pose.translation()-current_pose.translation()),omega;
 
                 //TEST
@@ -275,10 +262,10 @@ int main(int argc,char** argv)
                 // double cond = svd.singularValues()(0)/svd.singularValues()(svd.singularValues().size()-1);
                 // std::cout <<"Condition Number: " << cond <<std::endl;
 
-                Eigen::VectorXd joint_velocities = jacobian_pinv*twists + (Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients;
+                //TODO: Setup as param
+                Eigen::VectorXd joint_velocities = 2*jacobian_pinv*twists + 3*(Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients;
 
-                std::cout <<"target_link: " << joint_model_group->getLinkModels().back()->getName() <<std::endl;
-                std::cout <<"base_link: " << joint_model_group->getLinkModels().front()->getName() <<std::endl;
+                // std::cout <<"target_link: " << joint_model_group->getLinkModels().back()->getName() <<std::endl;
                 // std::cout<<"Desired twists: \n" << twists.transpose() <<std::endl;
                 // std::cout<<"Generated twists: \n" << (jacobian*joint_velocities).transpose() <<std::endl;
                 // std::cout<<"Base joint velocity component: \n" << (jacobian_pinv*twists).transpose() <<std::endl;
@@ -286,6 +273,7 @@ int main(int argc,char** argv)
                 // std::cout<<"Test joint_velocities: \n" << joint_velocities.transpose() <<std::endl;
                 
                 //Scale velocities
+                //TODO: Setup as param
                 double max_vel = 0.8;
                 // joint_velocities = joint_velocities.cwiseMax(-max_vel).cwiseMin(max_vel);
                 if(joint_velocities.cwiseAbs().maxCoeff()>max_vel)
@@ -299,7 +287,6 @@ int main(int argc,char** argv)
             }
             else
             {
-                std::cout <<"Goal reached!" <<std::endl;
                 joint_traj_pub->publish(fillJointTrajectoryPoint(Eigen::VectorXd::Zero(7),Eigen::VectorXd::Zero(7), 1.0));
             }
         }
