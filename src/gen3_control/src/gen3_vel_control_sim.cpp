@@ -19,7 +19,7 @@ bool new_velocity = false;
 bool vel_target_reached = true;
 int traj_position = 0;
 //Soft accel limit
-double soft_accel_limit = 35;
+double soft_accel_limit = 180;
 //Need to adjust the rest
 Eigen::Matrix<double,1,7> next_joint_vel;
 Eigen::VectorXd time_slices;
@@ -28,7 +28,8 @@ Eigen::VectorXd vel_command(7);
 
 std::vector<int> continuous_joints = {0,2,4,6};
 std::vector<int> non_continuous_joints = {1,3,5};
-double joint_lim = 2.23;
+//joint_limits in degrees
+std::vector<double> joint_limits = {0,138,0,152,0,127,0};
 
 void traj_callback(const trajectory_msgs::msg::JointTrajectoryPoint& msg)
 {
@@ -47,7 +48,7 @@ int main(int argc, char** argv)
   executor.add_node(gen3_control_node);
   std::thread([&executor]() { executor.spin(); }).detach();
   // Params
-  gen3_control_node->declare_parameter("pos_pub_rate",60);
+  gen3_control_node->declare_parameter("pos_pub_rate",120);
   // gen3_control_node->declare_parameter("enable_send_position",true);
   // gen3_control_node->declare_parameter("pub_test_positions",false);
   int pos_pub_rate = gen3_control_node->get_parameter("pos_pub_rate").as_int();
@@ -91,12 +92,15 @@ int main(int argc, char** argv)
       vel_target_reached = false;
       traj_position = 0;
       double completion_time = (joint_vel_target-gen3_q_dot_sim).cwiseAbs().maxCoeff()/soft_accel_limit;
-      // if(completion_time>period){
-      //     completion_time = round(completion_time/period)*period;
-      // }
-      time_slices = Eigen::VectorXd::LinSpaced(completion_time*rate, period, completion_time);
-      cubic_func = findCubicFunction(gen3_q_dot_sim,joint_vel_target,gen3_q_dotdot_sim,completion_time);
-      
+      if(completion_time < 2*period){
+        vel_target_reached = true;
+        vel_command = joint_vel_target;
+      }
+      else
+      {
+        time_slices = Eigen::VectorXd::LinSpaced(completion_time*rate, period, completion_time);
+        cubic_func = findCubicFunction(gen3_q_dot_sim,joint_vel_target,gen3_q_dotdot_sim,completion_time);
+      }
     } 
     //Get to target velocity for timestep
     //TODO: Need timing mechanism to ensure it doesn't spin forever. Should tie it in with completion time and collision detection
@@ -105,6 +109,7 @@ int main(int argc, char** argv)
       //Get desired Joint vales at time slice
       //Get velocity
       Eigen::Matrix<double,2,4> time_matrix;
+      // std::cout<<"Time slice: "<< traj_position << " out of " << time_slices.size() << std::endl;
       time_matrix.row(0) << 1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3);
       time_matrix.row(1) << 0,1,2*time_slices(traj_position),3*pow(time_slices(traj_position),2);
       Eigen::Matrix<double,2,7> result;
@@ -123,9 +128,9 @@ int main(int argc, char** argv)
     // Non continuous joints
     for(auto & joint : non_continuous_joints)
     {
-      if(abs(gen3_q_sim(joint)+delta_pos(joint))>joint_lim)
+      if(abs(gen3_q_sim(joint)+delta_pos(joint))>joint_limits[joint])
       {
-        // std::cout<<"JOINT LIMIT EXECEDED FOR JOINT " << joint << std::endl;
+        std::cout<<"JOINT LIMIT EXECEDED FOR JOINT " << joint << "Requesting: "<< gen3_q_sim(joint)+delta_pos(joint) <<" with lim: "<< joint_limits[joint]<< std::endl;
         vel_command(joint) = 0;
       }
       else

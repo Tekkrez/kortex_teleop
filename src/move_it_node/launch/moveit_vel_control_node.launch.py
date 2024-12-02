@@ -73,7 +73,7 @@ def generate_launch_description():
     )
     
     return LaunchDescription([
-        rviz_node,
+        # rviz_node,
         robot_state_publisher_node,
         moveit_traj_node
         ]

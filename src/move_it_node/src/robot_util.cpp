@@ -86,13 +86,18 @@ Eigen::VectorXd degreesToRadians(const Eigen::VectorXd& vec)
   return vec*M_PI/180;
 }
 
-Eigen::VectorXd vectorFMod(const Eigen::VectorXd& vec)
+std::vector<double> eigenToStdVec(const Eigen::VectorXd& vec)
 {
-  Eigen::VectorXd retVec(7);
-  for(int i=0; i<vec.size(); i++)
-  {
-    retVec(i) = fmod(vec(i),2*M_PI);
-  }
-  return retVec;
+  std::vector<double> vec_vec;
+  vec_vec.resize(vec.size());
+  Eigen::VectorXd::Map(&vec_vec[0],vec_vec.size()) = vec;
+  return vec_vec;
+}
+
+Eigen::VectorXd stdVecToEigen(const std::vector<double>& vec)
+{
+  Eigen::VectorXd eig_vec(vec.size());
+  std::copy(vec.begin(),vec.end(),eig_vec.data());
+  return eig_vec;
 }
 

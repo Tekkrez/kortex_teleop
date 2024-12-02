@@ -10,6 +10,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.h>
+#include <std_msgs/msg/float64_multi_array.hpp>
 // Util
 #include <robot_util.h>
 #include <chrono>
@@ -30,8 +31,6 @@ Eigen::VectorXd latest_q_dot(7);
 Eigen::VectorXd latest_q_dotdot(7);
 
 //Targets
-std::vector<double> desired_state;
-Eigen::VectorXd desired_q(7);
 Eigen::Isometry3d potential_target_pose;
 Eigen::Isometry3d target_pose;
 //params
@@ -121,6 +120,11 @@ int main(int argc,char** argv)
     //Joint trajectory pub
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectoryPoint>::SharedPtr joint_traj_pub;
     joint_traj_pub = traj_pub_node->create_publisher<trajectory_msgs::msg::JointTrajectoryPoint>("joint_trajectory",1);
+    //Test pub
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr joint_pos_test_pub;
+    joint_pos_test_pub = traj_pub_node->create_publisher<std_msgs::msg::Float64MultiArray>("twists",1);
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr joint_pos_test2_pub;
+    joint_pos_test2_pub = traj_pub_node->create_publisher<std_msgs::msg::Float64MultiArray>("gradients_vel_contribution",1);
 
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(traj_pub_node);
@@ -198,7 +202,7 @@ int main(int argc,char** argv)
             new_joint_state = false;
             //Update current Joint State and potential state
             current_state.setJointGroupPositions(joint_model_group,latest_q);
-            Eigen::Isometry3d current_pose = current_state.getGlobalLinkTransform("end_effector_link");
+            Eigen::Isometry3d current_pose =current_state.getGlobalLinkTransform("end_effector_link");
             //Determine if new pose is different enough from current pose
             Eigen::Isometry3d delta_pose = current_pose.inverse()*target_pose;
             Eigen::AngleAxisd angle_axis(delta_pose.rotation());
@@ -206,6 +210,18 @@ int main(int argc,char** argv)
             //Update output velocity if different enough
             if(delta_pose.translation().norm()>linear_distance_thresh || std::abs(angle_axis.angle())>angular_distance_thresh)
             {
+                if(delta_pose.translation().norm()>linear_distance_thresh && std::abs(angle_axis.angle())>angular_distance_thresh)
+                {
+                }
+                else if(delta_pose.translation().norm()>linear_distance_thresh)
+                {
+                    std::cout <<"NEED TO ONLY ADJUST Position" <<std::endl;
+                }
+                else if (std::abs(angle_axis.angle())>angular_distance_thresh)
+                {
+                    std::cout <<"NEED TO ONLY ADJUST Orientation" <<std::endl;
+                }
+
                 potential_state.setJointGroupPositions(joint_model_group,latest_q);
                 if(abs(angle_axis.angle())<M_PI)
                 {
@@ -213,22 +229,30 @@ int main(int argc,char** argv)
                 }
                 else if(angle_axis.angle()<=-M_PI)
                 {
+
+                    std::cout <<"Adjusting omega 1" <<std::endl;
                     omega = (2*M_PI+angle_axis.angle())*angle_axis.axis();
                 }
                 else if(angle_axis.angle()>=M_PI)
                 {
+
+                    std::cout <<"Adjusting omega 2" <<std::endl;
                     omega = (-2*M_PI+angle_axis.angle())*angle_axis.axis();
                 }
                 Eigen::VectorXd twists(6);
-                twists << delta_pose.translation(),omega;
+
+                twists << (target_pose.translation()-current_pose.translation()),Eigen::Vector3d::Zero();
+                twists << (target_pose.translation()-current_pose.translation()),omega;
+
+                //TEST
                 // Perhaps scale twists with diagonal matrix
-                Eigen::MatrixXd jacobian = current_state.getJacobian(joint_model_group);
-                Eigen::MatrixXd jacobian_pinv = jacobian.completeOrthogonalDecomposition().pseudoInverse();
+                const Eigen::MatrixXd jacobian = current_state.getJacobian(joint_model_group);
+                const Eigen::MatrixXd jacobian_pinv = jacobian.completeOrthogonalDecomposition().pseudoInverse();
                 //Perhaps use dls Jacobian for better singularity avoidance. Comes with the need to recalculate lambda for optimal usage
                 //GPM for joint limit management, which is only relevant for the non continuous joints
                 //This secondary task only activates once past the upper or lower bound.
                 //TODO: Setup as param
-                double joint_lim_bound = 1.5;
+                double joint_lim_bound = 0.5;
                 Eigen::VectorXd sec_task_gradients(7);
                 for(auto & joint : non_continuous_joints)
                 {
@@ -241,27 +265,43 @@ int main(int argc,char** argv)
                         sec_task_gradients(joint) = -(latest_q(joint)+joint_lim_bound)/2*joint_lim;
                     }
                 }
+                auto test_msg1 = std_msgs::msg::Float64MultiArray();
+                test_msg1.data = eigenToStdVec(twists);
+                joint_pos_test_pub->publish(test_msg1);
+                auto test_msg2 = std_msgs::msg::Float64MultiArray();
+                test_msg2.data = eigenToStdVec((Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients);
+                joint_pos_test2_pub->publish(test_msg2);
+                // Eigen::JacobiSVD<Eigen::MatrixXd> svd(jacobian);
+                // double cond = svd.singularValues()(0)/svd.singularValues()(svd.singularValues().size()-1);
+                // std::cout <<"Condition Number: " << cond <<std::endl;
+
                 Eigen::VectorXd joint_velocities = jacobian_pinv*twists + (Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients;
 
+                std::cout <<"target_link: " << joint_model_group->getLinkModels().back()->getName() <<std::endl;
+                std::cout <<"base_link: " << joint_model_group->getLinkModels().front()->getName() <<std::endl;
+                // std::cout<<"Desired twists: \n" << twists.transpose() <<std::endl;
+                // std::cout<<"Generated twists: \n" << (jacobian*joint_velocities).transpose() <<std::endl;
+                // std::cout<<"Base joint velocity component: \n" << (jacobian_pinv*twists).transpose() <<std::endl;
+                // std::cout<<"Gradient joint velocity Component: \n" << ((Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients).transpose() <<std::endl;\
+                // std::cout<<"Test joint_velocities: \n" << joint_velocities.transpose() <<std::endl;
+                
+                //Scale velocities
+                double max_vel = 0.8;
+                // joint_velocities = joint_velocities.cwiseMax(-max_vel).cwiseMin(max_vel);
+                if(joint_velocities.cwiseAbs().maxCoeff()>max_vel)
+                {
+                    const double vel_scaling = (joint_velocities/max_vel).cwiseAbs().maxCoeff();
+                    joint_velocities = joint_velocities/vel_scaling;
+                }
                 //pub joint_trajectory
                 joint_traj_pub->publish(fillJointTrajectoryPoint(Eigen::VectorXd::Zero(7),joint_velocities, 1.0));
                 //TODO: Check incremental collision and assosiciated completion time
             }
-            //TODO: Possible edge cases opened up here
             else
             {
+                std::cout <<"Goal reached!" <<std::endl;
+                joint_traj_pub->publish(fillJointTrajectoryPoint(Eigen::VectorXd::Zero(7),Eigen::VectorXd::Zero(7), 1.0));
             }
-            //
-            //TODO: Scale \omega??
-                // Handle the special case of zero rotation
-                // if (omega.norm() < 1e-6) {
-                //     omega.setZero();
-                // } else {
-                //     // Scale the rotation vector to ensure proper logarithm
-                //     double theta = omega.norm();
-                //     omega /= theta;
-                //     omega *= std::sin(theta / 2) / (theta / 2);
-                // }
         }
     }
     rclcpp::shutdown();
