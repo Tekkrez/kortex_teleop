@@ -88,6 +88,38 @@ trajectory_msgs::msg::JointTrajectoryPoint fillJointTrajectoryPoint(Eigen::Vecto
   return waypoint;
 }
 
+double timeTillCollision(const Eigen::VectorXd& jointVelTarget,const Eigen::VectorXd& currentPos, const moveit::core::JointModelGroup* jointModelGroup, moveit::core::RobotState& potentialState, const planning_scene::PlanningScene& planningScene)
+{
+    //Variables for collision detection
+    collision_detection::CollisionRequest collision_request;
+    collision_detection::CollisionResult collision_result;
+    collision_request.contacts = true;
+    collision_request.max_contacts = 10;
+    //Timeslice to extrapolate joint velocities with
+    double max_time = 0.5;
+    double resolution = 21;
+    auto time_slices = Eigen::VectorXd::LinSpaced(resolution,0,max_time);
+    // //Iterate thorugh the time slices and check if extrapolated joint states will result in a collision
+    for(double t : time_slices)
+    {
+        potentialState.setJointGroupPositions(jointModelGroup,currentPos+jointVelTarget*t);
+        collision_result.clear();
+        planningScene.checkCollision(collision_request, collision_result, potentialState);
+        if(collision_result.collision)
+        {
+            // RCLCPP_WARN_STREAM(LOGGER, "Joint velocities are in collision range"<<"\n");
+            RCLCPP_INFO_STREAM(LOGGER, "Time slice: "<< t <<"/" << max_time <<"\n");
+            collision_detection::CollisionResult::ContactMap::const_iterator it;
+            for (it = collision_result.contacts.begin(); it != collision_result.contacts.end(); ++it)
+            {
+                // RCLCPP_INFO(LOGGER, "Contact between: %s and %s", it->first.first.c_str(), it->first.second.c_str());
+            }
+            return t;
+        }
+    }
+    return 100;
+}
+
 
 int main(int argc,char** argv)
 {
@@ -180,19 +212,13 @@ int main(int argc,char** argv)
         RCLCPP_WARN_STREAM(LOGGER, "Object not able to be added"<<"\n");
     }
 
-    //Variables for collision detection
-    collision_detection::CollisionRequest collision_request;
-    collision_detection::CollisionResult collision_result;
-    collision_request.contacts = true;
-    collision_request.max_contacts = 10;
+
 
     const std::string PLANNING_GROUP = "manipulator";
     moveit::core::RobotState& current_state = planning_scene.getCurrentStateNonConst();
     moveit::core::RobotState potential_state = current_state;
-
     const moveit::core::JointModelGroup* joint_model_group = current_state.getJointModelGroup(PLANNING_GROUP);
-
-    // auto time_point1 = std::chrono::high_resolution_clock::now();
+      
 
     while(rclcpp::ok())
     {
@@ -202,6 +228,8 @@ int main(int argc,char** argv)
             new_joint_state = false;
             //Update current Joint State and potential state
             current_state.setJointGroupPositions(joint_model_group,latest_q);
+
+            //Get pose error values
             const Eigen::Isometry3d current_pose = current_state.getGlobalLinkTransform("end_effector_link");
             const Eigen::Quaterniond current_orientation(current_pose.rotation());
             const Eigen::Quaterniond target_orientation(target_pose.rotation());
@@ -212,27 +240,13 @@ int main(int argc,char** argv)
             //Update output velocity if different enough
             if(position_error.norm()>linear_distance_thresh || std::abs(orientation_error.angle())>angular_distance_thresh)
             {
-                // if(position_error.norm()>linear_distance_thresh && std::abs(orientation_error.angle())>angular_distance_thresh)
-                // {
-                // }
-                // else if(position_error.norm()>linear_distance_thresh)
-                // {
-                //     std::cout <<"NEED TO ONLY ADJUST Position" <<std::endl;
-                // }
-                // else if (std::abs(orientation_error.angle())>angular_distance_thresh)
-                // {
-                //     std::cout <<"NEED TO ONLY ADJUST Orientation" <<std::endl;
-                // }
-
                 //Assert act as a check, likely uneccesary since Eigen should take care of this when creating the angle axis object
                 assert(abs(orientation_error.angle())<=M_PI);
                 omega = orientation_error.angle()*orientation_error.axis();
                 //Find twists from pose errors
                 Eigen::VectorXd twists(6);
                 twists << (target_pose.translation()-current_pose.translation()),omega;
-
-                //TEST
-                // Perhaps scale twists with diagonal matrix
+                //Jacobians
                 const Eigen::MatrixXd jacobian = current_state.getJacobian(joint_model_group);
                 const Eigen::MatrixXd jacobian_pinv = jacobian.completeOrthogonalDecomposition().pseudoInverse();
                 //Perhaps use dls Jacobian for better singularity avoidance. Comes with the need to recalculate lambda for optimal usage
@@ -252,38 +266,42 @@ int main(int argc,char** argv)
                         sec_task_gradients(joint) = -(latest_q(joint)+joint_lim_bound)/2*joint_lim;
                     }
                 }
+
                 auto test_msg1 = std_msgs::msg::Float64MultiArray();
                 test_msg1.data = eigenToStdVec(twists);
                 joint_pos_test_pub->publish(test_msg1);
                 auto test_msg2 = std_msgs::msg::Float64MultiArray();
                 test_msg2.data = eigenToStdVec((Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients);
                 joint_pos_test2_pub->publish(test_msg2);
-                // Eigen::JacobiSVD<Eigen::MatrixXd> svd(jacobian);
-                // double cond = svd.singularValues()(0)/svd.singularValues()(svd.singularValues().size()-1);
-                // std::cout <<"Condition Number: " << cond <<std::endl;
 
                 //TODO: Setup as param
                 Eigen::VectorXd joint_velocities = 2*jacobian_pinv*twists + 3*(Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients;
-
-                // std::cout <<"target_link: " << joint_model_group->getLinkModels().back()->getName() <<std::endl;
-                // std::cout<<"Desired twists: \n" << twists.transpose() <<std::endl;
-                // std::cout<<"Generated twists: \n" << (jacobian*joint_velocities).transpose() <<std::endl;
-                // std::cout<<"Base joint velocity component: \n" << (jacobian_pinv*twists).transpose() <<std::endl;
-                // std::cout<<"Gradient joint velocity Component: \n" << ((Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients).transpose() <<std::endl;\
-                // std::cout<<"Test joint_velocities: \n" << joint_velocities.transpose() <<std::endl;
                 
                 //Scale velocities
                 //TODO: Setup as param
                 double max_vel = 0.8;
-                // joint_velocities = joint_velocities.cwiseMax(-max_vel).cwiseMin(max_vel);
                 if(joint_velocities.cwiseAbs().maxCoeff()>max_vel)
                 {
                     const double vel_scaling = (joint_velocities/max_vel).cwiseAbs().maxCoeff();
                     joint_velocities = joint_velocities/vel_scaling;
                 }
-                //pub joint_trajectory
-                joint_traj_pub->publish(fillJointTrajectoryPoint(Eigen::VectorXd::Zero(7),joint_velocities, 1.0));
-                //TODO: Check incremental collision and assosiciated completion time
+                const double collision_time = timeTillCollision(joint_velocities,latest_q,joint_model_group, potential_state, planning_scene);
+                if(collision_time<=0.1)
+                {
+                    std::cout<< "Stopped for collision************************************" << std::endl;
+                    joint_traj_pub->publish(fillJointTrajectoryPoint(Eigen::VectorXd::Zero(7),Eigen::VectorXd::Zero(7), 1.0));
+                }
+                else
+                {
+                    if(collision_time<100)
+                    {
+                        //Scale joint_velocities based on time to collide
+                        //3.5 chosen to shape the curve. 0.336 at t=0.1, 0.94 at t=0.5
+                        joint_velocities *= std::tanh(3.5*collision_time);
+                    }
+                    // pub joint_trajectory
+                    joint_traj_pub->publish(fillJointTrajectoryPoint(Eigen::VectorXd::Zero(7),joint_velocities, 1.0));
+                }
             }
             else
             {

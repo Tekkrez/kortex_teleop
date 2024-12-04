@@ -19,7 +19,7 @@ bool new_velocity = false;
 bool vel_target_reached = true;
 int traj_position = 0;
 //Soft accel limit
-double soft_accel_limit = 180;
+double soft_accel_limit = 60;
 //Need to adjust the rest
 Eigen::Matrix<double,1,7> next_joint_vel;
 Eigen::VectorXd time_slices;

@@ -69,11 +69,11 @@ def generate_launch_description():
         output="screen",
         emulate_tty=True,
         parameters=[moveit_config.to_dict(),move_it_node_config],
-    
+
     )
     
     return LaunchDescription([
-        # rviz_node,
+        rviz_node,
         robot_state_publisher_node,
         moveit_traj_node
         ]
