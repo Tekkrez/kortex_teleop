@@ -59,7 +59,7 @@ def generate_launch_description():
     move_it_node_config = os.path.join(
       get_package_share_directory('move_it_node'),
       'config',
-      'move_it_node.yaml'
+      'move_it_node_vel.yaml'
     )
 
     moveit_traj_node = Node(

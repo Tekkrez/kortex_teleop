@@ -35,7 +35,7 @@ def generate_launch_description():
     
     return LaunchDescription([
         vr_manager_node,
-        rviz_node,
+        # rviz_node,
         tf2_static_publisher_node
         ]
     )

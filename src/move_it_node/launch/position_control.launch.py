@@ -87,6 +87,6 @@ def generate_launch_description():
         rviz_node,
         robot_state_publisher_node,
         moveit_traj_node,
-        gen3_control_node
+        # gen3_control_node
         ]
     )

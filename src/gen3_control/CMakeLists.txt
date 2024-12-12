@@ -16,46 +16,64 @@ find_package(Eigen3 REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(backward_ros REQUIRED)
 
-# add_executable(gen3_control src/gen3_control.cpp src/kortex_robot.cpp src/robot_util.cpp)
+add_executable(gen3_vel_control src/gen3_vel_control.cpp src/kortex_robot.cpp src/robot_util.cpp)
 add_executable(gen3_vel_control_sim src/gen3_vel_control_sim.cpp  src/robot_util.cpp)
+add_executable(gen3_control src/gen3_control.cpp src/kortex_robot.cpp src/robot_util.cpp)
 
-# ament_target_dependencies(gen3_control PUBLIC
-#   rclcpp
-#   Eigen3
-#   sensor_msgs
-#   trajectory_msgs
-#   std_msgs
-#   )
+ament_target_dependencies(gen3_vel_control PUBLIC
+  rclcpp
+  Eigen3
+  sensor_msgs
+  trajectory_msgs
+  std_msgs
+  )
+ament_target_dependencies(gen3_control PUBLIC
+  rclcpp
+  Eigen3
+  sensor_msgs
+  trajectory_msgs
+  std_msgs
+  )
 
 ament_target_dependencies(gen3_vel_control_sim PUBLIC
   rclcpp
   Eigen3
   sensor_msgs
   trajectory_msgs
-  backward_ros
   )
 
-# target_link_libraries(gen3_control PUBLIC
-#   pthread
-#   ${PROJECT_SOURCE_DIR}/lib/release/libKortexApiCpp.a
-#   )
-
+target_link_libraries(gen3_vel_control PUBLIC
+  pthread
+  ${PROJECT_SOURCE_DIR}/lib/release/libKortexApiCpp.a
+  )
+target_link_libraries(gen3_control PUBLIC
+  pthread
+  ${PROJECT_SOURCE_DIR}/lib/release/libKortexApiCpp.a
+  )
 target_link_libraries(gen3_vel_control_sim PUBLIC
   pthread
   ${PROJECT_SOURCE_DIR}/lib/release/libKortexApiCpp.a
   )
 
-# target_include_directories(gen3_control
-#   PUBLIC
-#   # ${PROJECT_SOURCE_DIR}/include
-#   ${PROJECT_SOURCE_DIR}/include/gen3_control
-#   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client
-#   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client_stubs
-#   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/common
-#   # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/messages
-#   )
+target_include_directories(gen3_vel_control
+  PUBLIC
+  # ${PROJECT_SOURCE_DIR}/include
+  ${PROJECT_SOURCE_DIR}/include/gen3_control
+  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client
+  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client_stubs
+  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/common
+  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/messages
+  )
+target_include_directories(gen3_control
+  PUBLIC
+  # ${PROJECT_SOURCE_DIR}/include
+  ${PROJECT_SOURCE_DIR}/include/gen3_control
+  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client
+  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client_stubs
+  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/common
+  # ${PROJECT_SOURCE_DIR}/include/gen3_control/client/messages
+  )
 target_include_directories(gen3_vel_control_sim
   PUBLIC
   # ${PROJECT_SOURCE_DIR}/include
@@ -79,8 +97,9 @@ install(DIRECTORY config
 #Install exe
 install(
   TARGETS 
-    # gen3_control
+    gen3_vel_control
     gen3_vel_control_sim
+    gen3_control
   DESTINATION lib/${PROJECT_NAME}
 )
 

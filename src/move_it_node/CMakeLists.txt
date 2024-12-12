@@ -16,11 +16,16 @@ find_package(trajectory_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 
 
-# add_executable(move_it_node src/move_it_node.cpp src/robot_util.cpp)
+add_executable(move_it_node src/move_it_node.cpp src/robot_util.cpp)
 add_executable(move_it_vel_control_node src/move_it_node_vel_control.cpp src/robot_util.cpp)
 
 ament_target_dependencies(move_it_vel_control_node rclcpp moveit_ros_planning sensor_msgs geometry_msgs visualization_msgs trajectory_msgs tf2_ros)
+ament_target_dependencies(move_it_node rclcpp moveit_ros_planning sensor_msgs geometry_msgs visualization_msgs trajectory_msgs tf2_ros)
 
+target_include_directories(move_it_node
+  PUBLIC
+  ${PROJECT_SOURCE_DIR}/include/move_it_node
+  )
 target_include_directories(move_it_vel_control_node
   PUBLIC
   ${PROJECT_SOURCE_DIR}/include/move_it_node
@@ -29,6 +34,7 @@ target_include_directories(move_it_vel_control_node
 install(
   TARGETS
   move_it_vel_control_node
+  move_it_node
   DESTINATION
     lib/${PROJECT_NAME}
 )

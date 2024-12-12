@@ -34,8 +34,8 @@ Eigen::VectorXd latest_q_dotdot(7);
 Eigen::Isometry3d potential_target_pose;
 Eigen::Isometry3d target_pose;
 //params
-double soft_joint_speed_limit,time_step,linear_distance_thresh,angular_distance_thresh;
-double starting_displacement_weight,large_delta_thresh,large_delta_weight,medium_delta_thresh,medium_delta_weight;
+double linear_distance_thresh, angular_distance_thresh, joint_lim_bound, inv_vel_scale, sec_task_vel_scale, max_joint_vel;
+double cc_max_time, cc_resolution, cc_halt_time, tanh_x_scaling, tanh_x_translation;
 // Flags
 bool target_pose_received = false;
 bool traj_gen_needed = false;
@@ -96,9 +96,7 @@ double timeTillCollision(const Eigen::VectorXd& jointVelTarget,const Eigen::Vect
     collision_request.contacts = true;
     collision_request.max_contacts = 10;
     //Timeslice to extrapolate joint velocities with
-    double max_time = 0.5;
-    double resolution = 21;
-    auto time_slices = Eigen::VectorXd::LinSpaced(resolution,0,max_time);
+    auto time_slices = Eigen::VectorXd::LinSpaced(cc_resolution,0,cc_max_time);
     // //Iterate thorugh the time slices and check if extrapolated joint states will result in a collision
     for(double t : time_slices)
     {
@@ -108,7 +106,7 @@ double timeTillCollision(const Eigen::VectorXd& jointVelTarget,const Eigen::Vect
         if(collision_result.collision)
         {
             // RCLCPP_WARN_STREAM(LOGGER, "Joint velocities are in collision range"<<"\n");
-            RCLCPP_INFO_STREAM(LOGGER, "Time slice: "<< t <<"/" << max_time <<"\n");
+            RCLCPP_INFO_STREAM(LOGGER, "Time slice: "<< t <<"/" << cc_max_time <<"\n");
             collision_detection::CollisionResult::ContactMap::const_iterator it;
             for (it = collision_result.contacts.begin(); it != collision_result.contacts.end(); ++it)
             {
@@ -128,15 +126,17 @@ int main(int argc,char** argv)
     node_options.automatically_declare_parameters_from_overrides(true);
     auto traj_pub_node = rclcpp::Node::make_shared("traj_pub_node", node_options);
     //Params
-    soft_joint_speed_limit = traj_pub_node->get_parameter("soft_joint_speed_limit").as_double(); //rad/sec
-    time_step = traj_pub_node->get_parameter("time_step").as_double();
     linear_distance_thresh = traj_pub_node->get_parameter("linear_distance_thresh").as_double();
     angular_distance_thresh = traj_pub_node->get_parameter("angular_distance_thresh").as_double();
-    starting_displacement_weight = traj_pub_node->get_parameter("robot_description_kinematics.manipulator.minimal_displacement_weight").as_double();
-    large_delta_thresh = traj_pub_node->get_parameter("large_delta_thresh").as_double();
-    large_delta_weight = traj_pub_node->get_parameter("large_delta_weight").as_double();
-    medium_delta_thresh = traj_pub_node->get_parameter("medium_delta_thresh").as_double();
-    medium_delta_weight = traj_pub_node->get_parameter("medium_delta_weight").as_double();
+    joint_lim_bound = traj_pub_node->get_parameter("joint_limit_bound").as_double(); //rad/sec
+    inv_vel_scale = traj_pub_node->get_parameter("inverse_velocity_scaling").as_double();
+    sec_task_vel_scale = traj_pub_node->get_parameter("secondary_task_velocity_scaling").as_double();
+    max_joint_vel = traj_pub_node->get_parameter("max_joint_velocity").as_double();
+    cc_max_time = traj_pub_node->get_parameter("collision_check_max_time").as_double();
+    cc_resolution = traj_pub_node->get_parameter("collision_check_resolution").as_double();
+    cc_halt_time = traj_pub_node->get_parameter("collision_check_halt_time").as_double();
+    tanh_x_scaling = traj_pub_node->get_parameter("tanh_horizontal_scaling").as_double();
+    tanh_x_translation = traj_pub_node->get_parameter("tanh_horizontal_translation").as_double();
     
     //Subscribers
     rclcpp::QoS sub_qos(1);
@@ -212,8 +212,6 @@ int main(int argc,char** argv)
         RCLCPP_WARN_STREAM(LOGGER, "Object not able to be added"<<"\n");
     }
 
-
-
     const std::string PLANNING_GROUP = "manipulator";
     moveit::core::RobotState& current_state = planning_scene.getCurrentStateNonConst();
     moveit::core::RobotState potential_state = current_state;
@@ -252,8 +250,6 @@ int main(int argc,char** argv)
                 //Perhaps use dls Jacobian for better singularity avoidance. Comes with the need to recalculate lambda for optimal usage
                 //GPM for joint limit management, which is only relevant for the non continuous joints
                 //This secondary task only activates once past the upper or lower bound.
-                //TODO: Setup as param
-                double joint_lim_bound = 0.5;
                 Eigen::VectorXd sec_task_gradients(7);
                 for(auto & joint : non_continuous_joints)
                 {
@@ -274,19 +270,19 @@ int main(int argc,char** argv)
                 test_msg2.data = eigenToStdVec((Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients);
                 joint_pos_test2_pub->publish(test_msg2);
 
-                //TODO: Setup as param
-                Eigen::VectorXd joint_velocities = 2*jacobian_pinv*twists + 3*(Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients;
+                Eigen::VectorXd joint_velocities = inv_vel_scale*jacobian_pinv*twists + sec_task_vel_scale*(Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients;
                 
                 //Scale velocities
-                //TODO: Setup as param
-                double max_vel = 0.8;
-                if(joint_velocities.cwiseAbs().maxCoeff()>max_vel)
+                if(joint_velocities.cwiseAbs().maxCoeff()>max_joint_vel)
                 {
-                    const double vel_scaling = (joint_velocities/max_vel).cwiseAbs().maxCoeff();
+                    const double vel_scaling = (joint_velocities/max_joint_vel).cwiseAbs().maxCoeff();
                     joint_velocities = joint_velocities/vel_scaling;
                 }
+                // auto timepoint = std::chrono::high_resolution_clock::now();
                 const double collision_time = timeTillCollision(joint_velocities,latest_q,joint_model_group, potential_state, planning_scene);
-                if(collision_time<=0.1)
+                // auto delta = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now()-timepoint);
+                // std::cout<< "Collision check time: " << delta.count() << std::endl;
+                if(collision_time<=cc_halt_time)
                 {
                     std::cout<< "Stopped for collision************************************" << std::endl;
                     joint_traj_pub->publish(fillJointTrajectoryPoint(Eigen::VectorXd::Zero(7),Eigen::VectorXd::Zero(7), 1.0));
@@ -296,8 +292,8 @@ int main(int argc,char** argv)
                     if(collision_time<100)
                     {
                         //Scale joint_velocities based on time to collide
-                        //3.5 chosen to shape the curve. 0.336 at t=0.1, 0.94 at t=0.5
-                        joint_velocities *= std::tanh(3.5*collision_time);
+                        //tanh func is 0.2 at t=0.2, 0.918 at t=0.75
+                        joint_velocities *= std::tanh(tanh_x_scaling*collision_time-tanh_x_translation);
                     }
                     // pub joint_trajectory
                     joint_traj_pub->publish(fillJointTrajectoryPoint(Eigen::VectorXd::Zero(7),joint_velocities, 1.0));
