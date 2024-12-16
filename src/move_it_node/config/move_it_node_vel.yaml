@@ -1,11 +1,12 @@
 /move_it_node:
   ros__parameters:
     # Original at 0.2 for slow testing, ~0.5rad/s kortex default
+    # Make sure the parameters aren't intergers
     linear_distance_thresh: 0.005
     angular_distance_thresh: 0.05
-    joint_limit_bound: 0.5
+    joint_limit_bound: 0.1
     inverse_velocity_scaling: 2.0
-    secondary_task_velocity_scaling: 3.0
+    secondary_task_velocity_scaling: 6.0
     max_joint_velocity: 0.8
     # Collision checks
     collision_check_max_time: 0.75 

@@ -69,6 +69,23 @@ Eigen::Matrix<double,6,7> findQuinticFunction(const Eigen::VectorXd& startPos,co
   // std::cout<<"Solution: " <<coeffs<<std::endl;
   return coeffs;
 }
+//Finds coefficients for a linear function with a defined constant slope
+//All joints will get to target velocity at the same time
+Eigen::Matrix<double,2,7> findLinearFunction(const Eigen::VectorXd& startPos, const Eigen::VectorXd& endPos, const double& endTime)
+{
+  Eigen::Matrix<double,2,2> timeMatrix;
+  timeMatrix.row(0) << 1,0;
+  timeMatrix.row(1) << 1,endTime;
+
+  Eigen::Matrix<double,2,7> target;
+  target.row(0) = startPos;
+  target.row(1) = endPos;
+
+  Eigen::Matrix<double,2,7> coeffs;
+  coeffs = timeMatrix.colPivHouseholderQr().solve(target);
+  return coeffs;
+}
+
 
 //Create cubic smooth trajectory using start and position for each of the joints
 //Soft speed limit is used to determine time to complete trajectory

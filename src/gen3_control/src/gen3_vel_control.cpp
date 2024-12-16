@@ -19,10 +19,10 @@ bool vel_target_reached = true;
 int traj_position = 0;
 //Soft accel limit
 //TODO: Setup as param
-double soft_accel_limit = 90;
+double soft_accel_limit = 720;
 Eigen::Matrix<double,1,7> next_joint_vel;
 Eigen::VectorXd time_slices;
-Eigen::Matrix<double,4,7> cubic_func;
+Eigen::Matrix<double,2,7> linear_func;
 Eigen::VectorXd vel_command(7);
 
 void traj_callback(const trajectory_msgs::msg::JointTrajectoryPoint& msg)
@@ -93,6 +93,7 @@ int main(int argc, char** argv)
       traj_position = 0;
       double completion_time = (joint_vel_target-gen3_robot.q_dot).cwiseAbs().maxCoeff()/soft_accel_limit;
       
+      
       if(completion_time < 2*period)
       {
         vel_target_reached = true;
@@ -101,26 +102,30 @@ int main(int argc, char** argv)
       else
       {
         time_slices = Eigen::VectorXd::LinSpaced(completion_time*rate, period, completion_time);
-        cubic_func = findCubicFunction(gen3_robot.q_dot_filtered,joint_vel_target,gen3_robot.q_dotdot,completion_time);
+        linear_func = findLinearFunction(gen3_robot.q_dot_filtered,joint_vel_target,completion_time);
+
+        // std::cout << "Completion_time: " << completion_time << std::endl; 
+        // std::cout << "Current vel: " << gen3_robot.q_dot_filtered.transpose() << std::endl; 
+        // std::cout << "Target vel: " << joint_vel_target.transpose() << std::endl; 
+        // std::cout << "linear_function: " << linear_func << std::endl; 
       }
     }
     //Get next joint position for timestep
     if(!vel_target_reached)
     {
-      //Update joint values
-      //Get desired Joint vales at time slice
       //Get velocity
-      Eigen::Matrix<double,1,4> time_matrix;
-      // std::cout<<"Time slice: "<< traj_position << " out of " << time_slices.size() << std::endl;
-      time_matrix << 1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3);
+      Eigen::Matrix<double,1,2> time_matrix;
+      time_matrix.row(0) << 1,time_slices(traj_position);
+
       Eigen::Matrix<double,1,7> result;
-      result = time_matrix*cubic_func;
-      vel_command = result.transpose();
+      result = time_matrix*linear_func;
+      vel_command = result;
       traj_position++;
     }
 
     if(enable_send_position)
     {
+      //FIXME: 
       tracked_pos += vel_command*period;
       if(!gen3_robot.sendPosition(tracked_pos))
       {
@@ -171,7 +176,7 @@ int main(int argc, char** argv)
 
       //Pub joint_pos
         auto test_message = std_msgs::msg::Float64MultiArray();
-        test_message.data = eigenToStdVec(degreesToRadians(gen3_robot.q_dot));
+        test_message.data = eigenToStdVec(degreesToRadians(vel_command));
         joint_pos_test_pub->publish(test_message);
       }
     // auto duration = std::chrono::duration_cast<microseconds>(std::chrono::high_resolution_clock::now()-timePoint);

@@ -25,7 +25,7 @@ std::vector<std::string> joint_names = { "joint_1", "joint_2", "joint_3", "joint
 std::vector<int> continuous_joints = {0,2,4,6};
 std::vector<int> non_continuous_joints = {1,3,5};
 //Other two joint limits are larger than this, but keep it here for simplicity and additional room for error
-double joint_lim = 2.23;
+double joint_lim = 2.09;
 Eigen::VectorXd latest_q(7);
 Eigen::VectorXd latest_q_dot(7);
 Eigen::VectorXd latest_q_dotdot(7);
@@ -182,7 +182,7 @@ int main(int argc,char** argv)
     geometry_msgs::msg::Pose box_pose;
     box_pose.orientation.w = 1.0;
     box_pose.position.x = 0.8;
-    box_pose.position.y = -0.3;
+    box_pose.position.y = -0.31;
     box_pose.position.z = -0.13;//3.5 cm extra offset since robot is sitting on two plates
     collision_object.primitives.push_back(primitive);
     collision_object.primitive_poses.push_back(box_pose);
@@ -255,11 +255,11 @@ int main(int argc,char** argv)
                 {
                     if(latest_q(joint)>joint_lim_bound)
                     {
-                        sec_task_gradients(joint) = -(latest_q(joint)-joint_lim_bound)/2*joint_lim;
+                        sec_task_gradients(joint) = -pow(latest_q(joint)-joint_lim_bound,3)/2*joint_lim;
                     }
                     else if(latest_q(joint)<-joint_lim_bound)
                     {
-                        sec_task_gradients(joint) = -(latest_q(joint)+joint_lim_bound)/2*joint_lim;
+                        sec_task_gradients(joint) = -pow(latest_q(joint)+joint_lim_bound,3)/2*joint_lim;
                     }
                 }
 
@@ -267,8 +267,6 @@ int main(int argc,char** argv)
                 test_msg1.data = eigenToStdVec(twists);
                 joint_pos_test_pub->publish(test_msg1);
                 auto test_msg2 = std_msgs::msg::Float64MultiArray();
-                test_msg2.data = eigenToStdVec((Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients);
-                joint_pos_test2_pub->publish(test_msg2);
 
                 Eigen::VectorXd joint_velocities = inv_vel_scale*jacobian_pinv*twists + sec_task_vel_scale*(Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients;
                 
@@ -277,6 +275,8 @@ int main(int argc,char** argv)
                 {
                     const double vel_scaling = (joint_velocities/max_joint_vel).cwiseAbs().maxCoeff();
                     joint_velocities = joint_velocities/vel_scaling;
+                    test_msg2.data = eigenToStdVec((Eigen::MatrixXd::Identity(7,7)-jacobian_pinv*jacobian)*sec_task_gradients*sec_task_vel_scale/vel_scaling);
+                    joint_pos_test2_pub->publish(test_msg2);
                 }
                 // auto timepoint = std::chrono::high_resolution_clock::now();
                 const double collision_time = timeTillCollision(joint_velocities,latest_q,joint_model_group, potential_state, planning_scene);

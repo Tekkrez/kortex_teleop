@@ -122,14 +122,14 @@ class VRManager : public rclcpp::Node
             
             //Shoulder adjust
             shoulder_adjust <<-0.1,-0.07,-0.20;
-            //Rotate by 90 deg about Y axis so that end effector frame on the URDF is more naturally aligned with controller pose
-            ee_rot_adjustment.vec() << 0,0.7071068,0;
-            ee_rot_adjustment.w() = 0.7071068;
+            //Adjust orientation so that end effector frame on the URDF is more naturally aligned with controller pose
+            ee_rot_adjustment.vec() << 0.5,0.5,0.5;
+            ee_rot_adjustment.w() = 0.5;
             //Raise by 0.28 to align shoulder with robot shoulder
             ee_pos_adjustment << 0,0,0.28;
-            user_arm_length = 0.75;
+            user_arm_length = 0.65;
             //bit shoter that actual
-            robot_arm_length = 0.85;
+            robot_arm_length = 0.95;
 
         }   
 };

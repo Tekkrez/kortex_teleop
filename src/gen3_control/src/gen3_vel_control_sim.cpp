@@ -23,7 +23,7 @@ double soft_accel_limit = 60;
 //Need to adjust the rest
 Eigen::Matrix<double,1,7> next_joint_vel;
 Eigen::VectorXd time_slices;
-Eigen::Matrix<double,4,7> cubic_func;
+Eigen::Matrix<double,2,7> linear_func;
 Eigen::VectorXd vel_command(7);
 
 std::vector<int> continuous_joints = {0,2,4,6};
@@ -99,7 +99,7 @@ int main(int argc, char** argv)
       else
       {
         time_slices = Eigen::VectorXd::LinSpaced(completion_time*rate, period, completion_time);
-        cubic_func = findCubicFunction(gen3_q_dot_sim,joint_vel_target,gen3_q_dotdot_sim,completion_time);
+        linear_func = findLinearFunction(gen3_q_dot_sim,joint_vel_target,completion_time);
       }
     } 
     //Get to target velocity for timestep
@@ -108,13 +108,15 @@ int main(int argc, char** argv)
     {
       //Get desired Joint vales at time slice
       //Get velocity
-      Eigen::Matrix<double,2,4> time_matrix;
+      Eigen::Matrix<double,1,2> time_matrix;
       // std::cout<<"Time slice: "<< traj_position << " out of " << time_slices.size() << std::endl;
-      time_matrix.row(0) << 1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3);
-      time_matrix.row(1) << 0,1,2*time_slices(traj_position),3*pow(time_slices(traj_position),2);
-      Eigen::Matrix<double,2,7> result;
-      result = time_matrix*cubic_func;
-      vel_command = result.row(0).transpose();
+      time_matrix.row(0) << 1,time_slices(traj_position);
+      // time_matrix.row(0) << 1,time_slices(traj_position),pow(time_slices(traj_position),2),pow(time_slices(traj_position),3);
+      // time_matrix.row(1) << 0,1,2*time_slices(traj_position),3*pow(time_slices(traj_position),2);
+      Eigen::Matrix<double,1,7> result;
+      result = time_matrix*linear_func;
+      // vel_command = result.row(0).transpose();
+      vel_command = result;
     }
     //Simulate command
     //Update sim position assuming perfect tracking
