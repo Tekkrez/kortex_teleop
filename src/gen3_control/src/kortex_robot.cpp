@@ -83,6 +83,9 @@ kortex_robot::kortex_robot(int rate,double q_dot_alpha,double q_dotdot_alpha){
     period = 1/static_cast<double>(rate);
     accel_filt.lowPassFilterInit(Eigen::VectorXd(7), q_dotdot_alpha);    
     vel_filt.lowPassFilterInit(Eigen::VectorXd(7), q_dot_alpha);
+    // Wait for a bit
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
 }
 
 kortex_robot::~kortex_robot(){
@@ -162,7 +165,7 @@ void kortex_robot::checkFeedback()
     q_dotdot = accel_filt.applyFilter((q_dot_filtered-prev_q_dot)/(period));
     prev_q_dot=q_dot_filtered;
 }
-//Initializes base_command. Calls getFeedback() first
+//Initializes base_command and gripper command. Calls getFeedback() first
 bool kortex_robot::setBaseCommand()
 {
     if(!kortex_robot::getFeedback())
@@ -174,6 +177,16 @@ bool kortex_robot::setBaseCommand()
     {
         base_command.add_actuators()->set_position(base_feedback.actuators(i).position());
     }
+
+    gripper_position = base_feedback.interconnect().gripper_feedback().motor()[0].position();
+
+    base_command.mutable_interconnect()->mutable_command_id()->set_identifier(0);
+    gripper_command = base_command.mutable_interconnect()->mutable_gripper_command()->add_motor_cmd();
+    gripper_command->set_position(gripper_position);
+    gripper_command->set_velocity(0.0);
+    //Threshold before gripper stops. 100 is max threshold
+    gripper_command->set_force(100.0);
+
     return true;
 }
 
@@ -228,54 +241,84 @@ bool kortex_robot::sendPosition(const Eigen::VectorXd& desired_q_step)
         return false;
     }
 }
-//Converts velocity to position using rate
-//Assumes default control mode of position
-//Need to be called after refreshFeedback and after base_command is set
-// bool kortex_robot::sendVelocity(const Eigen::VectorXd& desired_vel)
-// {
-//     if(!low_level_servoing)
-//     {
-//         return false;
-//     }
-//     try
-//     {
-//         //Get new frame ID
-//         base_command.set_frame_id(base_command.frame_id() + 1);;
-//         if(base_command.frame_id()>65535)
-//         {
-//             base_command.set_frame_id(0);
-//         }
-//         // Go through continuous joints
-//         for(auto & joint : continuous_joints)
-//         {
-//             base_command.mutable_actuators(joint)->set_position(fmod(q(joint)+delta_pos(joint),360.0));
-//             base_command.mutable_actuators(joint)->set_command_id(base_command.frame_id());
-//         }
-//         // Non continuous joints
-//         for(auto & joint : non_continuous_joints)
-//         {
-//             if(abs(q(joint)+delta_pos(joint))>joint_limits[joint])
-//             {
-//                 std::cout<<"JOINT LIMIT EXECEDED FOR JOINT " << joint << std::endl;
-//                 return false;
-//             }
-//             else
-//             {
-//                 base_command.mutable_actuators(joint)->set_position(fmod(q(joint)+delta_pos(joint),360.0));
-//                 base_command.mutable_actuators(joint)->set_command_id(base_command.frame_id());
-//             }
-//         }
-//         base_feedback = base_cyclic->Refresh(base_command,0);
-//         return true;
-//     }
-//     catch(k_api::KDetailedException& ex)
-//     {
-//         kExceptionHandle(ex);
-//         return false;
-//     }
-//     catch(std::runtime_error& ex2)
-//     {
-//         stdExceptionHandle(ex2);
-//         return false;
-//     }
-// }
+//update target gripper position and send it
+bool kortex_robot::sendGripperPosition(double target_position,double proportional_gain)
+{
+    double position_error;
+    double velocity;
+    if(target_position>100)
+    {
+        target_position = 100;
+    }
+    else if (target_position<0)
+    {
+        target_position = 0;
+    }
+    try
+    {
+        gripper_position = base_feedback.interconnect().gripper_feedback().motor()[0].position();
+        position_error = target_position-gripper_position;
+
+        if(abs(position_error)<minimum_position_error)
+        {
+            gripper_command->set_velocity(0);
+        }
+        else
+        {
+            velocity = proportional_gain*abs(position_error);
+            if(velocity>100.0)
+            {
+                velocity = 100;
+            }
+            gripper_command->set_position(target_position);
+            gripper_command->set_velocity(velocity);
+        }
+        base_feedback = base_cyclic->Refresh(base_command,0);
+    }
+    catch(std::runtime_error& ex2)
+    {
+        stdExceptionHandle(ex2);
+        return false;
+    }
+    return true;
+}
+//Update gripper command, but doesn't send it
+bool kortex_robot::updateGripperPosition(double target_position,double proportional_gain)
+{
+    double position_error;
+    double velocity;
+    if(target_position>100)
+    {
+        target_position = 100;
+    }
+    else if (target_position<0)
+    {
+        target_position = 0;
+    }
+    try
+    {
+        gripper_position = base_feedback.interconnect().gripper_feedback().motor()[0].position();
+        position_error = target_position-gripper_position;
+
+        if(abs(position_error)<minimum_position_error)
+        {
+            gripper_command->set_velocity(0);
+        }
+        else
+        {
+            velocity = proportional_gain*abs(position_error);
+            if(velocity>100.0)
+            {
+                velocity = 100;
+            }
+            gripper_command->set_position(target_position);
+            gripper_command->set_velocity(velocity);
+        }
+    }
+    catch(std::runtime_error& ex2)
+    {
+        stdExceptionHandle(ex2);
+        return false;
+    }
+    return true;
+}

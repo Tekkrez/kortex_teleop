@@ -42,6 +42,7 @@ private:
     k_api::BaseCyclic::BaseCyclicClient* base_cyclic;
     k_api::BaseCyclic::Feedback base_feedback;
     k_api::BaseCyclic::Command  base_command;
+    k_api::GripperCyclic::MotorCommand* gripper_command;
 
     k_api::Base::ServoingModeInformation servoing_mode;
     bool low_level_servoing = false;
@@ -55,6 +56,8 @@ public:
     Eigen::VectorXd q_dotdot;
     Eigen::VectorXd prev_q_dot;
     double period;
+    double minimum_position_error = 1.5;
+    double gripper_position;
     LowPassFilter vel_filt;
     LowPassFilter accel_filt;
 
@@ -73,6 +76,8 @@ public:
     void checkFeedback();
 
     bool sendPosition(const Eigen::VectorXd& desired_q_step);
+    bool sendGripperPosition(double target_position,double proportional_gain=2.0);
+    bool updateGripperPosition(double target_position,double proportional_gain=2.0);
     // bool sendVelocity(const Eigen::VectorXd& desired_vel);
     bool setBaseCommand();
 };

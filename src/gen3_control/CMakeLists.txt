@@ -16,6 +16,7 @@ find_package(Eigen3 REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 add_executable(gen3_vel_control src/gen3_vel_control.cpp src/kortex_robot.cpp src/robot_util.cpp)
 add_executable(gen3_vel_control_sim src/gen3_vel_control_sim.cpp  src/robot_util.cpp)
@@ -27,6 +28,7 @@ ament_target_dependencies(gen3_vel_control PUBLIC
   sensor_msgs
   trajectory_msgs
   std_msgs
+  std_srvs
   )
 ament_target_dependencies(gen3_control PUBLIC
   rclcpp

@@ -6,6 +6,7 @@
 #include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
+#include <std_srvs/srv/set_bool.hpp>
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("gen3_control_node");
 std::vector<std::string> joint_names = { "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6", "joint_7", "robotiq_85_right_knuckle_joint",
 "robotiq_85_left_inner_knuckle_joint","robotiq_85_right_inner_knuckle_joint" ,"robotiq_85_left_finger_tip_joint","robotiq_85_right_finger_tip_joint","robotiq_85_left_knuckle_joint"};
@@ -16,6 +17,7 @@ const double period=1/static_cast<double>(rate);
 Eigen::VectorXd joint_vel_target(7);
 bool new_velocity = false;
 bool vel_target_reached = true;
+double target_grip_pos = 0;
 int traj_position = 0;
 //Soft accel limit
 //TODO: Setup as param
@@ -29,6 +31,27 @@ void traj_callback(const trajectory_msgs::msg::JointTrajectoryPoint& msg)
 {
   joint_vel_target = radiansToDegrees(stdVecToEigen(msg.velocities));
   new_velocity = true;
+}
+void set_gripper_state_callback(const std::shared_ptr<std_srvs::srv::SetBool_Request> request, std::shared_ptr<std_srvs::srv::SetBool_Response> response)
+{
+    //Toggle tracking enable
+    if(request->data)
+    {
+      target_grip_pos = 100;
+    }
+    else
+    {
+      target_grip_pos = 0;
+    }
+    response->success = true;
+    if(request->data)
+    {
+        response->message = "Closed Gripper";
+    }
+    else
+    {
+        response->message = "Opened Gripper";
+    }
 }
 
 int main(int argc, char** argv)
@@ -52,6 +75,13 @@ int main(int argc, char** argv)
   bool pub_test_positions = gen3_control_node->get_parameter("pub_test_positions").as_bool();
   double q_dot_alpha = gen3_control_node->get_parameter("q_dot_alpha").as_double();
   double q_dotdot_alpha = gen3_control_node->get_parameter("q_dotdot_alpha").as_double();
+    
+  //Gripper state select service
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_gripper_state_service = 
+      gen3_control_node->create_service<std_srvs::srv::SetBool>("set_gripper_state",&set_gripper_state_callback);
+
+
+
   //Joint state publisher
   rclcpp::QoS pub_qos(1);
   pub_qos.best_effort();
@@ -78,7 +108,6 @@ int main(int argc, char** argv)
   //Need this since if using live joint position to rotate the joint, 
   //the resulting velocities are much lower than expected and the joints drift toward the ground
   Eigen::VectorXd tracked_pos = gen3_robot.q;
-
   // auto timePoint = std::chrono::high_resolution_clock::now();
   while(rclcpp::ok())
   {
@@ -125,7 +154,6 @@ int main(int argc, char** argv)
 
     if(enable_send_position)
     {
-      //FIXME: 
       tracked_pos += vel_command*period;
       if(!gen3_robot.sendPosition(tracked_pos))
       {
@@ -144,6 +172,12 @@ int main(int argc, char** argv)
     if(traj_position == time_slices.size())
     {
       vel_target_reached = true;
+    }
+    //TODO: Fix gripper commands
+    if(!gen3_robot.sendGripperPosition(target_grip_pos))
+    {
+      std::cout<<"Send gripper position error!!"<< std::endl;
+      break;
     }
     // else
     // {
