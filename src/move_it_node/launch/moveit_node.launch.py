@@ -63,7 +63,6 @@ def generate_launch_description():
         output="screen",
         emulate_tty=True,
         parameters=[moveit_config.to_dict()],
-    
     )
     
     return LaunchDescription([

@@ -14,7 +14,7 @@ def generate_launch_description():
                 remappings=[
                     ('in', 'image_raw')
                     ],
-                parameters=[{"out.compressed.jpeg_quality":95,"qos_overrides./parameter_events.publisher.reliability":"best_effort","qos_overrides./parameter_events.publisher.depth": 5}]
+                parameters=[{"out.compressed.jpeg_quality":95,"qos_overrides./parameter_events.publisher.reliability":"best_effort","qos_overrides./parameter_events.publisher.depth": 1}]
             )
     
     return LaunchDescription([

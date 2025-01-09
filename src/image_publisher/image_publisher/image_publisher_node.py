@@ -8,9 +8,9 @@ class ImagePublisher(Node):
     
     def __init__(self):
         super().__init__('webcam_pub_node')
-        self.publisher_ = self.create_publisher(Image,'image_raw',5)
-        self.timer = self.create_timer(0.04,self.timer_callback)
-        self.cap = cv2.VideoCapture(1)
+        self.publisher_ = self.create_publisher(Image,'image_raw',1)
+        self.timer = self.create_timer(0.03333333333,self.timer_callback)
+        self.cap = cv2.VideoCapture(2)
         self.cv_bridge = CvBridge()
     def timer_callback(self):
         ret,frame = self.cap.read()

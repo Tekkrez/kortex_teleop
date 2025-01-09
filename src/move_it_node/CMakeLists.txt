@@ -14,12 +14,13 @@ find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(std_srvs REQUIRED)
 
 
 add_executable(move_it_node src/move_it_node.cpp src/robot_util.cpp)
 add_executable(move_it_vel_control_node src/move_it_node_vel_control.cpp src/robot_util.cpp)
 
-ament_target_dependencies(move_it_vel_control_node rclcpp moveit_ros_planning sensor_msgs geometry_msgs visualization_msgs trajectory_msgs tf2_ros)
+ament_target_dependencies(move_it_vel_control_node rclcpp moveit_ros_planning sensor_msgs geometry_msgs visualization_msgs trajectory_msgs tf2_ros std_srvs)
 ament_target_dependencies(move_it_node rclcpp moveit_ros_planning sensor_msgs geometry_msgs visualization_msgs trajectory_msgs tf2_ros)
 
 target_include_directories(move_it_node

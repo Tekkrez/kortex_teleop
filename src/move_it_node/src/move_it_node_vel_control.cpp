@@ -11,6 +11,7 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.h>
 #include <std_msgs/msg/float64_multi_array.hpp>
+#include <std_srvs/srv/trigger.hpp>
 // Util
 #include <robot_util.h>
 #include <chrono>
@@ -37,6 +38,7 @@ Eigen::Isometry3d target_pose;
 double linear_distance_thresh, angular_distance_thresh, joint_lim_bound, inv_vel_scale, sec_task_vel_scale, max_joint_vel;
 double cc_max_time, cc_resolution, cc_halt_time, tanh_x_scaling, tanh_x_translation;
 // Flags
+bool tracking_enabled = false;
 bool target_pose_received = false;
 bool traj_gen_needed = false;
 bool new_joint_state = false;
@@ -118,6 +120,24 @@ double timeTillCollision(const Eigen::VectorXd& jointVelTarget,const Eigen::Vect
     return 100;
 }
 
+void toggle_tracking_callback(const std::shared_ptr<std_srvs::srv::Trigger_Request> request, std::shared_ptr<std_srvs::srv::Trigger_Response> response)
+{
+    //Toggle tracking enable
+    tracking_enabled = !tracking_enabled;
+    response->success = true;
+    if(tracking_enabled)
+    {
+        response->message = "Enabled tracking";
+        std::cout <<"Enabled tracking"<<std::endl;
+    }
+    else
+    {
+        response->message = "Disabled tracking";
+        std::cout <<"Disabled tracking"<<std::endl;
+    }
+
+}
+
 
 int main(int argc,char** argv)
 {
@@ -138,6 +158,10 @@ int main(int argc,char** argv)
     tanh_x_scaling = traj_pub_node->get_parameter("tanh_horizontal_scaling").as_double();
     tanh_x_translation = traj_pub_node->get_parameter("tanh_horizontal_translation").as_double();
     
+    //Toggle tracking service
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr toggle_tracking_service = 
+        traj_pub_node->create_service<std_srvs::srv::Trigger>("toggle_tracking",&toggle_tracking_callback);
+
     //Subscribers
     rclcpp::QoS sub_qos(1);
     sub_qos.best_effort();
@@ -235,8 +259,8 @@ int main(int argc,char** argv)
             const Eigen::Vector3d position_error(target_pose.translation()-current_pose.translation());
             Eigen::Vector3d omega;
 
-            //Update output velocity if different enough
-            if(position_error.norm()>linear_distance_thresh || std::abs(orientation_error.angle())>angular_distance_thresh)
+            //Update output velocity if different enough from current pose and tracking is enabled
+            if((position_error.norm()>linear_distance_thresh || std::abs(orientation_error.angle())>angular_distance_thresh) && tracking_enabled)
             {
                 //Assert act as a check, likely uneccesary since Eigen should take care of this when creating the angle axis object
                 assert(abs(orientation_error.angle())<=M_PI);
