@@ -18,6 +18,7 @@ Eigen::VectorXd joint_vel_target(7);
 bool new_velocity = false;
 bool vel_target_reached = true;
 double target_grip_pos = 0;
+bool grip_target_reached = false;
 int traj_position = 0;
 //Soft accel limit
 //TODO: Setup as param
@@ -34,7 +35,7 @@ void traj_callback(const trajectory_msgs::msg::JointTrajectoryPoint& msg)
 }
 void set_gripper_state_callback(const std::shared_ptr<std_srvs::srv::SetBool_Request> request, std::shared_ptr<std_srvs::srv::SetBool_Response> response)
 {
-    //Toggle tracking enable
+    //set gripper state
     if(request->data)
     {
       target_grip_pos = 100;
@@ -52,6 +53,7 @@ void set_gripper_state_callback(const std::shared_ptr<std_srvs::srv::SetBool_Req
     {
         response->message = "Opened Gripper";
     }
+    grip_target_reached = false;
 }
 
 int main(int argc, char** argv)
@@ -155,12 +157,31 @@ int main(int argc, char** argv)
     if(enable_send_position)
     {
       tracked_pos += vel_command*period;
+      if(!gen3_robot.updateGripperPosition(target_grip_pos))
+      {
+        std::cout<<"Send gripper position error!!"<< std::endl;
+        break;
+      }
       if(!gen3_robot.sendPosition(tracked_pos))
       {
         std::cout<<"Send velocity error!!"<< std::endl;
         break;
       }
     }
+    else if(!grip_target_reached)
+    {
+      //update grip_target_reached
+      if(!gen3_robot.sendGripperPosition(target_grip_pos))
+      {
+        std::cout<<"Send gripper position error!!"<< std::endl;
+        break;
+      }
+      if(abs(target_grip_pos- gen3_robot.gripper_position)<gen3_robot.minimum_position_error)
+      {
+        grip_target_reached = true;
+      }
+    }
+
     if(pub_test_positions)
     {
       //Pub joint_vel
@@ -172,12 +193,6 @@ int main(int argc, char** argv)
     if(traj_position == time_slices.size())
     {
       vel_target_reached = true;
-    }
-    //TODO: Fix gripper commands
-    if(!gen3_robot.sendGripperPosition(target_grip_pos))
-    {
-      std::cout<<"Send gripper position error!!"<< std::endl;
-      break;
     }
     // else
     // {

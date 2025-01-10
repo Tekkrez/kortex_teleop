@@ -11,7 +11,7 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.h>
 #include <std_msgs/msg/float64_multi_array.hpp>
-#include <std_srvs/srv/trigger.hpp>
+#include <std_srvs/srv/set_bool.hpp>
 // Util
 #include <robot_util.h>
 #include <chrono>
@@ -120,20 +120,23 @@ double timeTillCollision(const Eigen::VectorXd& jointVelTarget,const Eigen::Vect
     return 100;
 }
 
-void toggle_tracking_callback(const std::shared_ptr<std_srvs::srv::Trigger_Request> request, std::shared_ptr<std_srvs::srv::Trigger_Response> response)
+void toggle_tracking_callback(const std::shared_ptr<std_srvs::srv::SetBool_Request> request, std::shared_ptr<std_srvs::srv::SetBool_Response> response)
 {
     //Toggle tracking enable
-    tracking_enabled = !tracking_enabled;
-    response->success = true;
-    if(tracking_enabled)
+    if(request->data)
     {
-        response->message = "Enabled tracking";
-        std::cout <<"Enabled tracking"<<std::endl;
-    }
-    else
-    {
-        response->message = "Disabled tracking";
-        std::cout <<"Disabled tracking"<<std::endl;
+        tracking_enabled = !tracking_enabled;
+        response->success = true;
+        if(tracking_enabled)
+        {
+            response->message = "Enabled tracking";
+            std::cout <<"Enabled tracking"<<std::endl;
+        }
+        else
+        {
+            response->message = "Disabled tracking";
+            std::cout <<"Disabled tracking"<<std::endl;
+        }
     }
 
 }
@@ -159,8 +162,8 @@ int main(int argc,char** argv)
     tanh_x_translation = traj_pub_node->get_parameter("tanh_horizontal_translation").as_double();
     
     //Toggle tracking service
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr toggle_tracking_service = 
-        traj_pub_node->create_service<std_srvs::srv::Trigger>("toggle_tracking",&toggle_tracking_callback);
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr toggle_tracking_service = 
+        traj_pub_node->create_service<std_srvs::srv::SetBool>("toggle_tracking",&toggle_tracking_callback);
 
     //Subscribers
     rclcpp::QoS sub_qos(1);
