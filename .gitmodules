@@ -1,0 +1,9 @@
+[submodule "ros2_kortex_vision"]
+	path = ros2_kortex_vision
+	url = https://github.com/PickNikRobotics/ros2_kortex_vision
+[submodule "src/ros2_kortex_vision"]
+	path = src/ros2_kortex_vision
+	url = https://github.com/PickNikRobotics/ros2_kortex_vision
+[submodule "src/unseen_object_clustering_ros2"]
+	path = src/unseen_object_clustering_ros2
+	url = https://github.com/Tekkrez/unseen_object_clustering_ros2
