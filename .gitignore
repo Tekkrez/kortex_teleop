@@ -2,4 +2,6 @@ build/
 log/
 install/
 
-*.pth
+*checkpoint.pth
+*.pt
+*debug*.png

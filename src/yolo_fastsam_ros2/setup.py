@@ -19,7 +19,7 @@ setup(
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
-        'console_scripts': ["instance_segmenter = yolo_fastsam_ros2.fastsam_node:main"
+        'console_scripts': ["instance_segmenter = yolo_fastsam_ros2.fastsam_node:main","grasp_requester = yolo_fastsam_ros2.request_grasp_node:main"
         ],
     },
 )

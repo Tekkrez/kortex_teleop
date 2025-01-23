@@ -1,11 +1,8 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.task import Future
 import rclpy.time
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge
-
-from teleop_interfaces.srv import GraspReq
 
 from ultralytics import FastSAM
 from ultralytics.engine.results import Results
@@ -82,7 +79,9 @@ class instance_segmenter(Node):
     def run_network(self):
         # ,points = [[self.image.shape[0]/2,self.image.shape[1]/2]]
         center = [600,350]
-        results = self.network(self.image,points = [center],conf=0.2)
+        # Run segmentation network
+        results = self.network(self.image,points = [center],conf=0.2, verbose=False)
+        # Process results
         result: Results =  results[0]
         masks: Masks = result.masks
         collapsed_mask = torch.any(masks.data,dim=0).type(torch.uint8)*255

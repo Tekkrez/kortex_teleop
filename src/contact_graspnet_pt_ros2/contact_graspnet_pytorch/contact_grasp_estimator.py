@@ -390,6 +390,9 @@ class GraspEstimator:
         pc_segments = {}
         if segmap is not None:
             pc_segments = {}
+            # FIXME:
+            print(f'Unique segments: {np.unique(segmap[segmap>0])}')
+
             obj_instances = [segmap_id] if segmap_id else np.unique(segmap[segmap>0])
             for i in obj_instances:
                 if skip_border_objects and not i==segmap_id:

@@ -55,7 +55,7 @@ class Grasp_Generator(Node):
         # self.run_network()
         
     def run_network(self):
-        pc_full,pc_segments,pc_colours = self.grasp_network.extract_point_clouds(depth = self.depth_image,segmap=self.segmentation_map,segmap_id = None,rgb=self.rgb_image,K=self.k_intrinsics,skip_border_objects=True,z_range=[0.2,1.8])
+        pc_full,pc_segments,pc_colours = self.grasp_network.extract_point_clouds(depth = self.depth_image,segmap=self.segmentation_map,segmap_id = 1,rgb=self.rgb_image,K=self.k_intrinsics,skip_border_objects=True,z_range=[0.2,1.8])
         # desired_keys = [1.0,2.0,3.0]
         # pc_segments  = {key: pc_segments[key] for key in desired_keys if key in pc_segments}
         # for i in pc_segments:
@@ -71,11 +71,11 @@ class Grasp_Generator(Node):
         self.rgb_image = self.cv_bridge.imgmsg_to_cv2(request.image,desired_encoding='rgb8').copy()
         self.segmentation_map = self.cv_bridge.imgmsg_to_cv2(request.segmentation_map).copy()
         
-        cv2.imshow('pic',self.segmentation_map)
-        # cv2.imshow('pic2',self.rgb_image)
-        cv2.waitKey(0)
-        # closing all open windows
-        cv2.destroyAllWindows()
+        # cv2.imshow('pic',self.segmentation_map)
+        # # cv2.imshow('pic2',self.rgb_image)
+        # cv2.waitKey(0)
+        # # closing all open windows
+        # cv2.destroyAllWindows()
 
         intrinsics = request.camera_info.k
         self.k_intrinsics = np.array(intrinsics).reshape(3, 3)
