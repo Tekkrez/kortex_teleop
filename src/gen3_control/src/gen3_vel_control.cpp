@@ -82,8 +82,6 @@ int main(int argc, char** argv)
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_gripper_state_service = 
       gen3_control_node->create_service<std_srvs::srv::SetBool>("set_gripper_state",&set_gripper_state_callback);
 
-
-
   //Joint state publisher
   rclcpp::QoS pub_qos(1);
   pub_qos.best_effort();

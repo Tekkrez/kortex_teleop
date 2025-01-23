@@ -12,7 +12,6 @@ find_package(sensor_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(teleop_interfaces
-  "msg/XRPose.msg"
   "srv/GraspReq.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs sensor_msgs
 )

@@ -1,8 +1,11 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.task import Future
 import rclpy.time
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge,CvBridgeError
+
+from teleop_interfaces.srv import GraspReq
 
 import torch
 import torch.nn.parallel
@@ -10,7 +13,6 @@ import torch.backends.cudnn as cudnn
 import torch.nn
 
 import threading
-
 import cv2
 import numpy as np
 
@@ -42,6 +44,11 @@ class scene_segmenter(Node):
         self.rgb_time = None
         self.depth_time = None
 
+        self.colour_message = None
+        self.depth_message = None
+        self.camera_info_message = None
+        self.segmentation_message = None
+
         self.camera_intrinsics_set = False
         self.fx=None
         self.fy=None
@@ -72,6 +79,13 @@ class scene_segmenter(Node):
         self.seg_image_pub = self.create_publisher(Image,"seg_image",3)
         self.seg_refined_image_pub = self.create_publisher(Image,"seg_refined_image",3)
 
+
+        # Service client
+        self.client = self.create_client(GraspReq,'request_grasp')
+        # while not self.client.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info("Grasp service not available")
+        self.future: Future = None
+
         #CV Bride
         self.cv_bridge = CvBridge()
 
@@ -101,6 +115,7 @@ class scene_segmenter(Node):
 
     def set_camera_info(self,msg):
         if(not self.camera_intrinsics_set):
+            self.camera_info_message = msg
             intrinsics = np.array(msg.k).reshape(3, 3)
             self.fx = intrinsics[0, 0]
             self.fy = intrinsics[1, 1]
@@ -113,6 +128,7 @@ class scene_segmenter(Node):
         im = self.cv_bridge.imgmsg_to_cv2(msg,'bgr8')
         im = pad_im(cv2.resize(im, None, None, fx=self.im_scale, fy=self.im_scale, interpolation=cv2.INTER_LINEAR), 16)
         with lock:
+            self.colour_message = msg
             self.im = im.copy()
             self.rgb_frameid = msg.header.frame_id
             self.rgb_framestamp = msg.header.stamp
@@ -132,6 +148,7 @@ class scene_segmenter(Node):
         depth_cv2 /= 1000
         depth_cv2 = pad_im(cv2.resize(depth_cv2, None, None, fx=self.im_scale, fy=self.im_scale, interpolation=cv2.INTER_NEAREST), 16)
         with lock:
+            self.depth_message = msg
             self.depth = depth_cv2.copy()
             self.depth_time = rclpy.time.Time(seconds=msg.header.stamp.sec,nanoseconds=msg.header.stamp.nanosec)
             # print("depth time: " , self.depth_time)
@@ -200,6 +217,7 @@ class scene_segmenter(Node):
         self.label_pub.publish(label_msg)
 
         num_object = len(np.unique(label)) - 1
+
         print('%d objects' % (num_object))
 
         if out_label_refined is not None:
@@ -208,6 +226,7 @@ class scene_segmenter(Node):
             label_msg_refined.header.stamp = rgb_frame_stamp
             label_msg_refined.header.frame_id = rgb_frame_id
             label_msg_refined.encoding = 'mono8'
+            self.segmentation_message = label_msg_refined
             self.refined_label_pub.publish(label_msg_refined)
 
         # publish segmentation images
@@ -223,6 +242,21 @@ class scene_segmenter(Node):
             rgb_msg_refined.header.stamp = rgb_frame_stamp
             rgb_msg_refined.header.frame_id = rgb_frame_id
             self.seg_refined_image_pub.publish(rgb_msg_refined)
+
+        # Request grasp from segmentation image
+        request = GraspReq.Request()
+        request.image = self.colour_message
+        request.depth_image = self.depth_message
+        request.camera_info = self.camera_info_message
+        request.segmentation_map = self.segmentation_message
+        if self.future is None:
+            self.future = self.client.call_async(request)
+            self.future.add_done_callback(self.process_response)
+
+    def process_response(self, future: Future):
+        response = future.result()
+        if response.success:
+            print("***********************SUCCESS**************")
 
 def main(args=None):
     rclpy.init(args=args)
