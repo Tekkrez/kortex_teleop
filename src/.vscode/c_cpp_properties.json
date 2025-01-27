@@ -1,0 +1,26 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/tekkrez/kortex_teleop/install/teleop_interfaces/include/**",
+        "/home/tekkrez/kortex_teleop/install/gen3_control/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/tekkrez/kortex_teleop/src/gen3_control/include/**",
+        "/home/tekkrez/kortex_teleop/src/move_it_node/include/**",
+        "/home/tekkrez/kortex_teleop/src/ros2_kortex_vision/include/**",
+        "/home/tekkrez/kortex_teleop/src/vr_manager/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

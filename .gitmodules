@@ -7,3 +7,10 @@
 [submodule "src/unseen_object_clustering_ros2"]
 	path = src/unseen_object_clustering_ros2
 	url = https://github.com/Tekkrez/unseen_object_clustering_ros2
+[submodule "src/ROS-TCP-Endpoint"]
+	path = src/ROS-TCP-Endpoint
+	url = https://github.com/Unity-Technologies/ROS-TCP-Endpoint
+	branch = main-ros2
+[submodule "src/ros2_aruco"]
+	path = src/ros2_aruco
+	url = https://github.com/JMU-ROBOTICS-VIVA/ros2_aruco
