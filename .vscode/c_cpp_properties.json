@@ -12,7 +12,8 @@
         "/usr/include/**",
         "${workspaceFolder}/src/gen3_control/include/**",
         "${workspaceFolder}/src/vr_manager/include/**",
-        "${workspaceFolder}/install/**"
+        "${workspaceFolder}/install/**",
+        "${workspaceFolder}/src/ros2_aruco/**"
       ],
       "name": "ROS",
       "intelliSenseMode": "gcc-x64",

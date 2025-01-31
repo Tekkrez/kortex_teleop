@@ -17,9 +17,10 @@ enum device {
 class VRManager : public rclcpp::Node
 {
     private:
+        // Flags
         bool set_ref_point = false;
+        // EE position finding
         Eigen::Isometry3d shoulder_ref;
-        // Eigen::Isometry3d right_rel_pose;
         Eigen::Quaterniond right_rel_quaternion;
         LowPassFilter pos_filter;
         LowPassFilter quat_filter;
@@ -33,6 +34,7 @@ class VRManager : public rclcpp::Node
         Eigen::Quaterniond ee_rot_adjustment;
         Eigen::Vector3d ee_pos_adjustment,shoulder_adjust;
         double user_arm_length,robot_arm_length;
+
         void VRPose_callback(const geometry_msgs::msg::PoseArray& msg)
         {
             Eigen::Isometry3d hmd_pose,right_pose,right_rel_pose;
@@ -119,7 +121,7 @@ class VRManager : public rclcpp::Node
             right_rel_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("desired_pose",5);
             right_shoulder_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("right_shoulder_pose",5);
             delta_time_pub = this->create_publisher<std_msgs::msg::Float64>("delta_time",5);
-            
+
             //Shoulder adjust
             shoulder_adjust <<-0.1,-0.07,-0.20;
             //Adjust orientation so that end effector frame on the URDF is more naturally aligned with controller pose
@@ -130,7 +132,6 @@ class VRManager : public rclcpp::Node
             user_arm_length = 0.65;
             //bit shoter that actual
             robot_arm_length = 0.95;
-
         }   
 };
 int main(int argc,char** argv)

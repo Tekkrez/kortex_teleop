@@ -1,0 +1,11 @@
+/realsense2_camera_node:
+  ros__parameters:
+    camera_namespace: 'head'
+    camera_name: 'right'
+    rgb_camera.color_profile: '1280x720x30'
+    enable_color: True
+    temporal_filter.enable: True
+    spatial_filter.enable: True
+    align_depth: true
+    enable_infra1: False
+    enable_infra2: False

@@ -18,7 +18,9 @@
 #include <thread>
 #include <tf2_eigen/tf2_eigen.hpp>
 using std::placeholders::_1;
-
+// For Waypoints
+#include <teleop_interfaces/srv/manipulator_waypoints.hpp>
+#include <std_srvs/srv/set_bool.hpp>
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("moveit_traj_node");
 
 //Joint names
@@ -45,6 +47,24 @@ bool new_joint_state = false;
 bool large_delta_pose = false;
 bool medium_delta_pose = false;
 
+// Waypoint flags
+bool waypoint_reached = false;
+bool target_reached = false;
+bool waypoint_end_reached = true;
+bool gripper_state_needs_change = false;
+bool gripper_request_recieved = false;
+bool gripper_requested = false;
+bool gripper_closed = false;
+bool check_gripper_vec = false;
+rclcpp::Time gripper_start_time;
+double gripper_wait_duration = 1.0;
+std::vector<geometry_msgs::msg::Pose> waypoint_poses_vec;
+std::vector<bool> waypoint_gripper_states_vec;
+int waypoint_pos = 0;
+
+
+using namespace std::chrono_literals;
+
 void jointState_Callback(const sensor_msgs::msg::JointState& msg)
 {
     new_joint_state = true;
@@ -63,9 +83,12 @@ void jointState_Callback(const sensor_msgs::msg::JointState& msg)
 
 void targetPose_callback(const geometry_msgs::msg::PoseStamped& msg)
 {
-    //Copy message to target_pose
-    tf2::fromMsg(msg.pose,target_pose);
-    target_pose_received = true;
+    if(waypoint_end_reached)
+    {
+        //Copy message to target_pose
+        tf2::fromMsg(msg.pose,target_pose);
+        target_pose_received = true;
+    }
 }
 
 trajectory_msgs::msg::JointTrajectoryPoint fillJointTrajectoryPoint(Eigen::VectorXd positions, Eigen::VectorXd velocities, double timeVal)
@@ -141,6 +164,36 @@ void toggle_tracking_callback(const std::shared_ptr<std_srvs::srv::SetBool_Reque
 
 }
 
+void waypoint_callback (const std::shared_ptr<teleop_interfaces::srv::ManipulatorWaypoints_Request> request, const std::shared_ptr<teleop_interfaces::srv::ManipulatorWaypoints_Response> response)
+{
+    if(request->gripper_state.size() == request->poses.size())
+    {
+
+        std::cout<<"Recieved Waypoint Request"<< std::endl;
+        waypoint_end_reached = false;
+        waypoint_reached = true;
+        waypoint_poses_vec = request->poses;
+        waypoint_gripper_states_vec = request->gripper_state;
+        waypoint_pos = 0;
+        target_pose_received = true;
+
+        response->recieved = true;
+    }
+    else
+    {
+        std::cout<<"Waypoint request sizes don't match"<< std::endl;
+        response->recieved = false;
+    }
+
+}
+void gripper_client_callback(rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture future)
+{
+    auto response = future.get();
+    if(response->success)
+    {
+        gripper_request_recieved = true;
+    }
+}
 
 int main(int argc,char** argv)
 {
@@ -179,12 +232,21 @@ int main(int argc,char** argv)
     //Joint trajectory pub
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectoryPoint>::SharedPtr joint_traj_pub;
     joint_traj_pub = traj_pub_node->create_publisher<trajectory_msgs::msg::JointTrajectoryPoint>("joint_trajectory",1);
+    // Current pose pub
+    rclcpp::Publisher<geometry_msgs::msg::Pose>::SharedPtr current_pose_pub;
+    current_pose_pub = traj_pub_node->create_publisher<geometry_msgs::msg::Pose>("current_ee_pose",1);
     //Test pub
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr joint_pos_test_pub;
     joint_pos_test_pub = traj_pub_node->create_publisher<std_msgs::msg::Float64MultiArray>("twists",1);
     rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr joint_pos_test2_pub;
     joint_pos_test2_pub = traj_pub_node->create_publisher<std_msgs::msg::Float64MultiArray>("gradients_vel_contribution",1);
-
+    //Waypoint Service
+    rclcpp::Service<teleop_interfaces::srv::ManipulatorWaypoints>::SharedPtr waypoint_service;
+    waypoint_service = traj_pub_node->create_service<teleop_interfaces::srv::ManipulatorWaypoints>("manipulator_waypoints",&waypoint_callback);
+    // Grasping service
+    rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr gripper_service_client;
+    gripper_service_client = traj_pub_node->create_client<std_srvs::srv::SetBool>("set_gripper_state");
+    // Spin node
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(traj_pub_node);
     std::thread([&executor]() { executor.spin(); }).detach();
@@ -247,16 +309,101 @@ int main(int argc,char** argv)
 
     while(rclcpp::ok())
     {
+
         if(new_joint_state && target_pose_received)
         {
             //Reset flag
             new_joint_state = false;
             //Update current Joint State and potential state
             current_state.setJointGroupPositions(joint_model_group,latest_q);
-
-            //Get pose error values
+            // TODO: Publish this
+            // Get current pose and orientation from pose
             const Eigen::Isometry3d current_pose = current_state.getGlobalLinkTransform("end_effector_link");
             const Eigen::Quaterniond current_orientation(current_pose.rotation());
+            current_pose_pub->publish(tf2::toMsg(current_pose));
+            
+            if(!waypoint_end_reached)
+            {
+                // Starting state of "waypoint reached" is true to help with case when "waypoint pos" is at 0
+                if(waypoint_reached)
+                {
+                    std::cout<<"Inside waypoint assignment"<< std::endl;
+                    std::cout<<"Current Waypoint position: " << waypoint_pos<< std::endl;
+                    if(waypoint_pos==waypoint_poses_vec.size())
+                    {
+                        waypoint_end_reached = true;
+                        std::cout<<"------- Waypoint end reached -------: "<< std::endl;
+                    }
+                    else{
+                        
+                        tf2::fromMsg(waypoint_poses_vec[waypoint_pos],target_pose);
+                        waypoint_reached = false;
+                        check_gripper_vec =true;
+                        target_reached = false;
+
+                        std::cout<<"New target set: " << std::endl;                   
+                        std::cout << "target Position: " << target_pose.translation() << std::endl;
+                        std::cout << "target orientation: " << Eigen::Quaterniond(target_pose.rotation()) << std::endl;
+                    }
+                }
+                if(target_reached && !waypoint_end_reached && check_gripper_vec)
+                {
+                    check_gripper_vec = false;
+                    // As long as waypoint position is not at the beginning, check if gripper state needs to be changed
+                    if(waypoint_pos !=0)
+                    {
+                        if(waypoint_gripper_states_vec[waypoint_pos] == true && waypoint_gripper_states_vec[waypoint_pos-1] == false )
+                        {
+                            gripper_state_needs_change = true;
+                            gripper_requested = false;
+                            gripper_request_recieved = false;
+                        }
+                        else if(waypoint_gripper_states_vec[waypoint_pos] == false && waypoint_gripper_states_vec[waypoint_pos-1] == true)
+                        {
+                            gripper_state_needs_change = true;
+                            gripper_requested = false;
+                            gripper_request_recieved = false;
+                        }
+                    }
+                }
+
+                if(gripper_state_needs_change)
+                {  
+                    if(!gripper_request_recieved){
+                        if(!gripper_requested)
+                        {
+                            auto request = std::make_shared<std_srvs::srv::SetBool_Request>();
+                            request->data = waypoint_gripper_states_vec[waypoint_pos];
+                            while (!gripper_service_client->wait_for_service(1s)) 
+                            {
+                                if (!rclcpp::ok()) {
+                                    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
+                                    return 0;
+                                }
+                                RCLCPP_INFO(LOGGER, "Service Unavailable. Waiting for Service...");
+                            }
+                            auto result = gripper_service_client->async_send_request(request,gripper_client_callback);
+
+                            std::cout<<"Gripper change requested " << std::endl;    
+                            gripper_requested = true;
+                        }
+                        gripper_start_time = traj_pub_node->get_clock()->now();
+                    }
+                    // Wait for "gripper wait duration" after response from gripper service
+                    else if((traj_pub_node->get_clock()->now()-gripper_start_time).seconds()>=gripper_wait_duration)
+                    {
+                        gripper_state_needs_change = false;
+                    }
+                }
+
+                if(target_reached && !gripper_state_needs_change) 
+                {
+                    waypoint_reached = true;
+                    waypoint_pos++;
+                }
+            }
+
+            //Get pose error values
             const Eigen::Quaterniond target_orientation(target_pose.rotation());
             const Eigen::AngleAxisd orientation_error(target_orientation*current_orientation.inverse());
             const Eigen::Vector3d position_error(target_pose.translation()-current_pose.translation());
@@ -327,7 +474,10 @@ int main(int argc,char** argv)
                 }
             }
             else
-            {
+            {   if(tracking_enabled)
+                {
+                    target_reached = true;   
+                }
                 joint_traj_pub->publish(fillJointTrajectoryPoint(Eigen::VectorXd::Zero(7),Eigen::VectorXd::Zero(7), 1.0));
             }
         }
