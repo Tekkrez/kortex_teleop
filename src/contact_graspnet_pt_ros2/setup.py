@@ -24,7 +24,8 @@ setup(
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
-        'console_scripts': ["grasp_generator = contact_graspnet_pt_ros2.cgn_node:main"
+        'console_scripts': ["grasp_generator = contact_graspnet_pt_ros2.cgn_node:main",
+                            "test_cgn = contact_graspnet_pt_ros2.test_cgn:main"
         ],
     },
 )

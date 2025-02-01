@@ -185,7 +185,7 @@ bool kortex_robot::setBaseCommand()
     gripper_command->set_position(gripper_position);
     gripper_command->set_velocity(0.0);
     //Threshold before gripper stops. 100 is max threshold
-    gripper_command->set_force(100.0);
+    gripper_command->set_force(10.0);
 
     return true;
 }

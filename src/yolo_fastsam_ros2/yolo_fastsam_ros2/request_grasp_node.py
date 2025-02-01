@@ -39,9 +39,9 @@ class grasp_requester(Node):
         self.grasp_requested = False
 
         # Subscribers
-        self.cam_info_sub = self.create_subscription(CameraInfo,"/camera/camera/color/camera_info",self.set_camera_info,1)
-        self.colour_sub = self.create_subscription(Image,"/camera/camera/color/image_raw",self.colour_callback,3)
-        self.depth_sub = self.create_subscription(Image,"/camera/camera/aligned_depth_to_color/image_raw",self.depth_callback,3)
+        self.cam_info_sub = self.create_subscription(CameraInfo,"/head/right_camera/color/camera_info",self.set_camera_info,1)
+        self.colour_sub = self.create_subscription(Image,"/head/right_camera/color/image_raw",self.colour_callback,3)
+        self.depth_sub = self.create_subscription(Image,"/head/right_camera/aligned_depth_to_color/image_raw",self.depth_callback,3)
 
         # Publishers
         self.segmented_mask_pub = self.create_publisher(Image,"segmented_mask",3)
@@ -95,9 +95,8 @@ class grasp_requester(Node):
         return response
 
     def run_network(self):
-        # ,points = [[self.image.shape[0]/2,self.image.shape[1]/2]]
         center = [600,350]
-        results = self.network(self.image,points = [center],conf=0.2)
+        results = self.network(self.image,points = [center],conf=0.2,verbose=False)
         result: Results =  results[0]
         masks: Masks = result.masks
         collapsed_mask = torch.any(masks.data,dim=0).type(torch.uint8)*1
@@ -138,6 +137,10 @@ class grasp_requester(Node):
         response = future.result()
         if response.success:
             print(f'grasp request processed')
+            print(response.grasp_poses)
+            print(response.grasp_scores)
+            print(response.contact_points)
+            print(response.gripper_openings)
 
 def main(args=None):
     rclpy.init(args=args)

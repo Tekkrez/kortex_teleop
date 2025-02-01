@@ -26,7 +26,7 @@ class validate_model(Node):
 
         self.cv_bridge = CvBridge()
 
-        self.cam_info_sub = self.create_subscription(CameraInfo,"/camera/camera/color/camera_info",self.set_camera_info,1)
+        self.cam_info_sub = self.create_subscription(CameraInfo,"/head/right_camera/color/camera_info",self.set_camera_info,1)
 
         self.client = self.create_client(srv_type=GraspReq,srv_name='request_grasp')
         self.future: Future = None
