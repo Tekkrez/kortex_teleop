@@ -123,7 +123,7 @@ class Grasp_Generator(Node):
     def request_grasp_callback(self,request: GraspReq.Request,response: GraspReq.Response):
         # Prep input
         # Expecting depth_image in meters
-        self.depth_image = self.cv_bridge.imgmsg_to_cv2(request.depth_image).copy().astype(np.float32)
+        self.depth_image = self.cv_bridge.imgmsg_to_cv2(request.depth_image).copy().astype(np.float32)/1000
         self.rgb_image = self.cv_bridge.imgmsg_to_cv2(request.image,desired_encoding='rgb8').copy()
         self.segmentation_map = self.cv_bridge.imgmsg_to_cv2(request.segmentation_map).copy()
         intrinsics = request.camera_info.k

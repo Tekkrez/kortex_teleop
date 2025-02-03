@@ -51,7 +51,6 @@ def generate_launch_description():
                    "--qx", "-0.00081228","--qy", "0.000903","--qz", "0.0034416","--qw", "0.99999",
                    "--frame-id", "head_camera","--child-frame-id","head_camera_colour_frame"],
     )
-
     tf2_static_publisher_node_3 = Node(
         namespace="head",
         package="tf2_ros",
@@ -59,19 +58,30 @@ def generate_launch_description():
         name="depth_camera_tf_pub",
         output="screen",
         arguments=["--x", "0","--y", "0","--z", "0",
-                   "--qx", "-0.5","--qy", "0.5","--qz", "-0.5","--qw", "0.5",
-                   "--frame-id", "head_camera_depth_frame","--child-frame-id","head_camera_ros_depth_frame"],
+                   "--qx", "0","--qy", "0","--qz", "0","--qw", "1",
+                   "--frame-id", "head_camera_colour_frame","--child-frame-id","camera_color_optical_frame"],
     )    
-    tf2_static_publisher_node_4 = Node(
-        namespace="head",
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        name="color_camera_tf_pub",
-        output="screen",
-        arguments=["--x", "0","--y", "0","--z", "0",
-                   "--qx", "-0.5","--qy", "0.5","--qz", "-0.5","--qw", "0.5",
-                   "--frame-id", "head_camera_colour_frame","--child-frame-id","head_camera_ros_colour_frame"],
-    )
+
+    # tf2_static_publisher_node_3 = Node(
+    #     namespace="head",
+    #     package="tf2_ros",
+    #     executable="static_transform_publisher",
+    #     name="depth_camera_tf_pub",
+    #     output="screen",
+    #     arguments=["--x", "0","--y", "0","--z", "0",
+    #                "--qx", "-0.5","--qy", "0.5","--qz", "-0.5","--qw", "0.5",
+    #                "--frame-id", "head_camera_depth_frame","--child-frame-id","head_camera_ros_depth_frame"],
+    # )    
+    # tf2_static_publisher_node_4 = Node(
+    #     namespace="head",
+    #     package="tf2_ros",
+    #     executable="static_transform_publisher",
+    #     name="color_camera_tf_pub",
+    #     output="screen",
+    #     arguments=["--x", "0","--y", "0","--z", "0",
+    #                "--qx", "-0.5","--qy", "0.5","--qz", "-0.5","--qw", "0.5",
+    #                "--frame-id", "head_camera_colour_frame","--child-frame-id","head_camera_ros_colour_frame"],
+    # )
 
     kinova_vision = IncludeLaunchDescription(PythonLaunchDescriptionSource([
         FindPackageShare("kinova_vision"),'/launch/','kinova_vision.launch.py']))
@@ -112,7 +122,6 @@ def generate_launch_description():
         aruco_node_2,
         tf2_static_publisher_node_1,
         tf2_static_publisher_node_2,
-        tf2_static_publisher_node_3,
-        tf2_static_publisher_node_4
+        tf2_static_publisher_node_3
         ]
     )

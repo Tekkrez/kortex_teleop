@@ -13,6 +13,8 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(teleop_interfaces
   "srv/GraspReq.srv"
+  "srv/ExecuteGrasp.srv"
+  "srv/GraspTrigger.srv"
   "srv/ManipulatorWaypoints.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs sensor_msgs
 )

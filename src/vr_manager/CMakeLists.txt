@@ -16,9 +16,11 @@ find_package(teleop_interfaces REQUIRED)
 
 add_executable(vr_manager_node src/vr_manager_node.cpp src/vr_manager_utils.cpp)
 add_executable(camera_alignment_node src/camera_alignment.cpp src/vr_manager_utils.cpp)
+add_executable(grasp_executor_node src/execute_grasp.cpp)
 
 ament_target_dependencies(vr_manager_node rclcpp geometry_msgs tf2_eigen ros2_aruco_interfaces)
 ament_target_dependencies(camera_alignment_node rclcpp geometry_msgs tf2_eigen ros2_aruco_interfaces teleop_interfaces)
+ament_target_dependencies(grasp_executor_node rclcpp geometry_msgs tf2_eigen teleop_interfaces)
 
 target_include_directories(vr_manager_node
   PUBLIC
@@ -33,6 +35,7 @@ install(
   TARGETS
   vr_manager_node
   camera_alignment_node
+  grasp_executor_node
   DESTINATION
     lib/${PROJECT_NAME}
 )

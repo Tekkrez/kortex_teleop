@@ -2,10 +2,11 @@ import rclpy
 from rclpy.node import Node
 from rclpy.task import Future
 import rclpy.time
-from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge
+from sensor_msgs.msg import Image, CameraInfo
 from std_srvs.srv import SetBool
-from teleop_interfaces.srv import GraspReq
+from geometry_msgs.msg import PoseArray
+from teleop_interfaces.srv import GraspReq, ExecuteGrasp
 
 from ultralytics import FastSAM
 from ultralytics.engine.results import Results
@@ -46,12 +47,15 @@ class grasp_requester(Node):
         # Publishers
         self.segmented_mask_pub = self.create_publisher(Image,"segmented_mask",3)
         self.segmented_image_pub = self.create_publisher(Image,"segmented_image",3)
+        self.grasp_viz_pub = self.create_publisher(PoseArray,"grasp_poses_test",1)
         
         # Service server
         self.server = self.create_service(srv_type=SetBool,srv_name='trigger_grasp',callback=self.trigger_grasp_callback)
         # Service client
         self.client = self.create_client(GraspReq,'request_grasp')
+        self.execute_grasp_client = self.create_client(ExecuteGrasp,'execute_grasp')
         self.future : Future = None
+        self.execute_grasp_future: Future = None
 
         # Import network
         self.network = FastSAM("FastSAM-s.pt")
@@ -132,15 +136,33 @@ class grasp_requester(Node):
             # Send service request
             self.future = self.client.call_async(request)
             self.future.add_done_callback(self.process_response)
+            
+    def execute_grasp_response(self,future: Future):
+        response = future.result()
+        if response.success:
+            print("GRASP EXECUTED")
 
     def process_response(self, future: Future):
         response = future.result()
         if response.success:
-            print(f'grasp request processed')
-            print(response.grasp_poses)
-            print(response.grasp_scores)
-            print(response.contact_points)
-            print(response.gripper_openings)
+            pose_array_message = PoseArray()
+            pose_array_message.poses = response.grasp_poses
+            pose_array_message.header.frame_id = "head_camera_colour_frame"
+            pose_array_message.header.stamp = rclpy.time.Time().to_msg()
+            self.grasp_viz_pub.publish(pose_array_message)
+
+            execute_grasp_request = ExecuteGrasp.Request()
+            while not self.client.wait_for_service(timeout_sec=1.0):
+                self.get_logger().info(f'{self.client.srv_name} service not available, waiting...')
+            # Create request
+            execute_grasp_request.grasp_pose = response.grasp_poses[0]
+            execute_grasp_request.grasp_score = response.grasp_scores[0]
+            execute_grasp_request.contact_point = response.contact_points[0]
+            execute_grasp_request.gripper_opening = response.gripper_openings[0]
+            # Send request
+            self.execute_grasp_future = self.execute_grasp_client.call_async(execute_grasp_request)
+            self.future.add_done_callback(self.execute_grasp_response)
+
 
 def main(args=None):
     rclpy.init(args=args)
