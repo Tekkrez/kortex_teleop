@@ -4,9 +4,8 @@ from rclpy.task import Future
 import rclpy.time
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CameraInfo
-from std_srvs.srv import SetBool
 from geometry_msgs.msg import PoseArray
-from teleop_interfaces.srv import GraspReq, ExecuteGrasp
+from teleop_interfaces.srv import GraspReq, ExecuteGrasp, GraspTrigger
 
 # from ultralytics import FastSAM
 from ultralytics import SAM
@@ -39,19 +38,19 @@ class grasp_requester(Node):
         self.colour_msg = None
         self.camera_info_msg = None
         self.grasp_requested = False
-
+        self.center = [600,350]
         # Subscribers
         self.cam_info_sub = self.create_subscription(CameraInfo,"/head/right_camera/color/camera_info",self.set_camera_info,1)
         self.colour_sub = self.create_subscription(Image,"/head/right_camera/color/image_raw",self.colour_callback,3)
         self.depth_sub = self.create_subscription(Image,"/head/right_camera/aligned_depth_to_color/image_raw",self.depth_callback,3)
-
+        
         # Publishers
         self.segmented_mask_pub = self.create_publisher(Image,"segmented_mask",3)
         self.segmented_image_pub = self.create_publisher(Image,"segmented_image",3)
         self.grasp_viz_pub = self.create_publisher(PoseArray,"grasp_poses_test",1)
         
         # Service server
-        self.server = self.create_service(srv_type=SetBool,srv_name='trigger_grasp',callback=self.trigger_grasp_callback)
+        self.server = self.create_service(srv_type=GraspTrigger,srv_name='trigger_grasp',callback=self.trigger_grasp_callback)
         # Service client
         self.client = self.create_client(GraspReq,'request_grasp')
         self.execute_grasp_client = self.create_client(ExecuteGrasp,'execute_grasp')
@@ -59,11 +58,8 @@ class grasp_requester(Node):
         self.execute_grasp_future: Future = None
 
         # Import network
-        # self.network = FastSAM("FastSAM-x.pt")
-        # Import network
         self.network = SAM("sam2.1_t.pt")
 
-        #         from ultralytics import SAM
 
 
     def set_camera_info(self,msg: CameraInfo):
@@ -95,45 +91,54 @@ class grasp_requester(Node):
             if difference.nanoseconds*1e-9 < self.message_slop:
                 self.run_network()
 
-    def trigger_grasp_callback(self,request: SetBool.Request,response: SetBool.Response):
-        
-        if request.data == True:
-            self.grasp_requested = True
+    def trigger_grasp_callback(self,request: GraspTrigger.Request,response: GraspTrigger.Response):
+        left_gaze_point = np.array([request.gaze_point.data[0],1-request.gaze_point.data[1]])
+        # right_gaze_point = np.array([request.gaze_point.data[2],1-request.gaze_point.data[3]])
+        # Average the gaze points
+        # center_gaze_point = (left_gaze_point+right_gaze_point)/2
+        center_gaze_point = left_gaze_point
+
+        self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
+        print(f"Center: {self.center}")
+        self.grasp_requested = True
         response.success = True
         response.message = "Grasp requested"
-
         return response
 
     def run_network(self):
-        center = [600,350]
-        results = self.network(self.image,points = [center],conf=0.2,verbose=False)
-        result: Results =  results[0]
-        masks: Masks = result.masks
-        collapsed_mask = torch.any(masks.data,dim=0).type(torch.uint8)*1
-        segmented_mask = cv2.resize(collapsed_mask.cpu().numpy(),dsize=(result.orig_shape[1],result.orig_shape[0]))
-        masked_img = np.where(segmented_mask[...,None],np.array([0,0,255], dtype='uint8'),self.image)
-        segmented_image = cv2.addWeighted(self.image,0.7,masked_img,0.3,0)
-        segmented_image = cv2.circle(segmented_image,center=tuple(center),radius=10,color=(0,0,255),thickness=2)
-    
-        segmented_image_msg = self.cv_bridge.cv2_to_imgmsg(segmented_image,'rgb8')
-        segmented_image_msg.header.stamp = self.rgb_framestamp
-        segmented_image_msg.header.frame_id = self.rgb_frameid
-        self.segmented_image_pub.publish(segmented_image_msg)
-
-        segmented_mask_msg = self.cv_bridge.cv2_to_imgmsg(segmented_mask)
-        segmented_mask_msg.header.stamp = self.rgb_framestamp
-        segmented_mask_msg.header.frame_id = self.rgb_frameid
-        segmented_mask_msg.encoding = 'mono8'
-        self.segmented_mask_pub.publish(segmented_mask_msg)
-
-        torch.cuda.empty_cache()
         # Request grasp
         if self.grasp_requested:
+            # Reset flag
             self.grasp_requested = False
+            # Segment image based on gaze point
+            results = self.network(self.image,points = [self.center],conf=0.2,verbose=False)
+            result: Results =  results[0]
+            masks: Masks = result.masks
+            collapsed_mask = torch.any(masks.data,dim=0).type(torch.uint8)*1
+            segmented_mask = cv2.resize(collapsed_mask.cpu().numpy(),dsize=(result.orig_shape[1],result.orig_shape[0]))
+            masked_img = np.where(segmented_mask[...,None],np.array([0,0,255], dtype='uint8'),self.image)
+            # Visualize and send the segmented image
+            segmented_image = cv2.addWeighted(self.image,0.7,masked_img,0.3,0)
+            segmented_image = cv2.circle(segmented_image,center=tuple(self.center),radius=10,color=(0,255,0),thickness=2)
+            # TODO:
+            cv2.imwrite("segmented_image.jpg",segmented_image)
+            segmented_image_msg = self.cv_bridge.cv2_to_imgmsg(segmented_image,'rgb8')
+            segmented_image_msg.header.stamp = self.rgb_framestamp
+            segmented_image_msg.header.frame_id = self.rgb_frameid
+            self.segmented_image_pub.publish(segmented_image_msg)
+            # Send the segmented mask
+            segmented_mask_msg = self.cv_bridge.cv2_to_imgmsg(segmented_mask)
+            segmented_mask_msg.header.stamp = self.rgb_framestamp
+            segmented_mask_msg.header.frame_id = self.rgb_frameid
+            segmented_mask_msg.encoding = 'mono8'
+            self.segmented_mask_pub.publish(segmented_mask_msg)
+            # Might not be needed
+            torch.cuda.empty_cache()
+
+            # Request Grasp
             request = GraspReq.Request()
             while not self.client.wait_for_service(timeout_sec=1.0):
                 self.get_logger().info(f'{self.client.srv_name} service not available, waiting...')
-            
             # Create request
             request.image = self.colour_msg
             request.depth_image = self.depth_msg
@@ -158,7 +163,7 @@ class grasp_requester(Node):
             self.grasp_viz_pub.publish(pose_array_message)
 
             execute_grasp_request = ExecuteGrasp.Request()
-            while not self.client.wait_for_service(timeout_sec=1.0):
+            while not self.client.wait_for_service(timeout_sec=1.0) and rclpy.ok():
                 self.get_logger().info(f'{self.client.srv_name} service not available, waiting...')
             # Create request
             execute_grasp_request.grasp_pose = response.grasp_poses[0]

@@ -7,7 +7,7 @@ import open3d as o3d
 
 import matplotlib.pyplot as plt
 from matplotlib import cm
-
+import random
 from scipy.spatial.transform import Rotation as R
 
 import contact_graspnet_pytorch.mesh_utils as mesh_utils
@@ -53,7 +53,7 @@ def plot_mesh(mesh, cam_trafo=np.eye(4), mesh_pose=np.eye(4)):
 #     mlab.plot3d([t[0],t[0]+0.2*r[0,2]], [t[1],t[1]+0.2*r[1,2]], [t[2],t[2]+0.2*r[2,2]], color=(0,0,1), tube_radius=tube_radius, opacity=1)
 
 
-def plot_coordinates(vis, t, r, tube_radius=0.005, central_color=None):
+def plot_coordinates(vis, t, r, tube_radius=0.005, central_color=None,material_record = None):
     """
     Plots coordinate frame
 
@@ -70,9 +70,15 @@ def plot_coordinates(vis, t, r, tube_radius=0.005, central_color=None):
     colors = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]  # Red, Green, Blue
 
     if central_color is not None:
-        ball = o3d.geometry.TriangleMesh.create_sphere(radius=0.005)
-        ball.paint_uniform_color(np.array(central_color))
-        vis.add_geometry(ball)
+        if(material_record is not None):
+            ball = o3d.geometry.TriangleMesh.create_sphere(radius=0.005)
+            ball.paint_uniform_color(np.array(central_color))
+            material_record.shader = "unlitLine"
+            vis.add_geometry(str(random.randint(0,1000000)),ball,material=material_record)
+        else:
+            ball = o3d.geometry.TriangleMesh.create_sphere(radius=0.005)
+            ball.paint_uniform_color(np.array(central_color))
+            vis.add_geometry(ball)
 
     for i in range(3):
         line_points = [[t[0], t[1], t[2]],
@@ -88,7 +94,11 @@ def plot_coordinates(vis, t, r, tube_radius=0.005, central_color=None):
 
     # Visualize the lines in the Open3D visualizer
     for line in lines:
-        vis.add_geometry(line)
+        if(material_record is not None):
+            material_record.shader = "unlitLine"
+            vis.add_geometry(str(random.randint(0,1000000)),line,material=material_record)
+        else:
+            vis.add_geometry(line)
 
 def show_image(rgb, segmap):
     """
@@ -144,8 +154,6 @@ def visualize_grasps(full_pc, pred_grasps_cam, scores, plot_opencv_cam=False, pc
     if(pc_colors is not None):
         pcd.colors = o3d.utility.Vector3dVector(pc_colors.astype(np.float64) / 255)
 
-    
-
     vis = o3d.visualization.Visualizer()
     vis.create_window()
     vis.add_geometry(pcd)
@@ -188,8 +196,92 @@ def visualize_grasps(full_pc, pred_grasps_cam, scores, plot_opencv_cam=False, pc
                 best_grasp_idx = np.argmax(scores[k])
                 draw_grasps(vis, [pred_grasps_cam[k][best_grasp_idx]], np.eye(4), colors=[(1, 0, 0)], gripper_openings=gripper_openings_k)
 
+    camera_params = vis.get_view_control().convert_to_pinhole_camera_parameters()
+    extrinsic = np.eye(4)
+    camera_params.extrinsic = extrinsic
+    # if(intrinsics is not None):
+    #     camera_params.intrinsic.height = 1280
+    #     camera_params.intrinsic.width = 720
+    #     camera_params.intrinsic.intrinsic_matrix = intrinsics
+    vis.get_view_control().convert_from_pinhole_camera_parameters(camera_params,allow_arbitrary=True)
     vis.run()
     vis.destroy_window()
+    return
+
+def modified_visualize_grasps(full_pc, pred_grasps_cam, scores, plot_opencv_cam=False, pc_colors=None, gripper_openings=None, gripper_width=0.08,
+                     T_world_cam=np.eye(4), plot_others=[],intrinsics=None):
+    """Visualizes colored point cloud and predicted grasps. If given, colors grasps by segmap regions.
+    Thick grasp is most confident per segment. For scene point cloud predictions, colors grasps according to confidence.
+
+    Arguments:
+        full_pc {np.ndarray} -- Nx3 point cloud of the scene
+        pred_grasps_cam {dict[int:np.ndarray]} -- Predicted 4x4 grasp trafos per segment or for whole point cloud
+        scores {dict[int:np.ndarray]} -- Confidence scores for grasps
+
+    Keyword Arguments:
+        plot_opencv_cam {bool} -- plot camera coordinate frame (default: {False})
+        pc_colors {np.ndarray} -- Nx3 point cloud colors (default: {None})
+        gripper_openings {dict[int:np.ndarray]} -- Predicted grasp widths (default: {None})
+        gripper_width {float} -- If gripper_openings is None, plot grasp widths (default: {0.008})
+    """
+
+    #https://stackoverflow.com/questions/69696354/capture-depth-image-without-opening-visualizer-in-open3d
+    # https://www.open3d.org/docs/latest/python_api/open3d.visualization.rendering.OffscreenRenderer.html
+    print('Visualizing...')
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(full_pc)
+    if(pc_colors is not None):
+        pcd.colors = o3d.utility.Vector3dVector(pc_colors.astype(np.float64) / 255)
+
+    
+    render = o3d.visualization.rendering.OffscreenRenderer(1280, 720)
+    material = o3d.visualization.rendering.MaterialRecord()
+    material.shader = "defaultUnlit"
+    vis = render.scene
+    vis.add_geometry("Point Cloud",pcd,material)
+
+    if plot_opencv_cam:
+        plot_coordinates(vis, np.zeros(3,),np.eye(3,3), central_color=(0.5, 0.5, 0.5),material_record=o3d.visualization.rendering.MaterialRecord())
+        # This is world in cam frame
+        T_cam_world = np.linalg.inv(T_world_cam)  # We plot everything in the camera frame
+        t = T_cam_world[:3,3]
+        r = T_cam_world[:3,:3]
+        plot_coordinates(vis, t, r,material_record=o3d.visualization.rendering.MaterialRecord())
+
+    for t in plot_others:
+        plot_coordinates(vis, t[:3, 3], t[:3,:3])
+
+    cm = plt.get_cmap('rainbow')
+    cm2 = plt.get_cmap('viridis')
+
+    colors = [cm(1. * i/len(pred_grasps_cam))[:3] for i in range(len(pred_grasps_cam))]
+    colors2 = {k:cm2(0.5*np.max(scores[k]))[:3] for k in pred_grasps_cam if np.any(pred_grasps_cam[k])}
+
+    for i,k in enumerate(pred_grasps_cam):
+        if np.any(pred_grasps_cam[k]):
+            # Set gripper openings
+            if gripper_openings is None:
+                gripper_openings_k = np.ones(len(pred_grasps_cam[k]))*gripper_width
+            else:
+                gripper_openings_k = gripper_openings[k]
+
+            if len(pred_grasps_cam) > 1:
+                draw_grasps(vis, pred_grasps_cam[k], np.eye(4), colors=[colors[i]], gripper_openings=gripper_openings_k,material_record=o3d.visualization.rendering.MaterialRecord())
+                draw_grasps(vis, [pred_grasps_cam[k][np.argmax(scores[k])]], np.eye(4), colors=[colors2[k]],
+                            gripper_openings=[gripper_openings_k[np.argmax(scores[k])]], tube_radius=0.0025,material_record=o3d.visualization.rendering.MaterialRecord())
+            else:
+                max_score = np.max(scores[k])
+                min_score = np.min(scores[k])
+
+                colors3 = [cm2((score - min_score) / (max_score - min_score))[:3] for score in scores[k]]
+                draw_grasps(vis, pred_grasps_cam[k], np.eye(4), colors=colors3, gripper_openings=gripper_openings_k,material_record=o3d.visualization.rendering.MaterialRecord())
+                best_grasp_idx = np.argmax(scores[k])
+                draw_grasps(vis, [pred_grasps_cam[k][best_grasp_idx]], np.eye(4), colors=[(1, 0, 0)], gripper_openings=gripper_openings_k,material_record=o3d.visualization.rendering.MaterialRecord())
+    
+    # View the point cloud from the camera frame aka the origin
+    render.setup_camera(intrinsic_matrix = intrinsics, extrinsic_matrix = np.eye(4),intrinsic_width_px = 1280, intrinsic_height_px = 720)
+    img = render.render_to_image()
+    o3d.io.write_image("test_2.png", img)
     return
 
 
@@ -228,7 +320,7 @@ def draw_pc_with_colors(pc, pc_colors=None, single_color=(0.3,0.3,0.3), mode='2d
         points_mlab.module_manager.scalar_lut_manager.lut.number_of_colors = rgb_lut.shape[0]
         points_mlab.module_manager.scalar_lut_manager.lut.table = rgb_lut
 
-def draw_grasps(vis, grasps, cam_pose, gripper_openings, colors=[(0, 1., 0)], show_gripper_mesh=False, tube_radius=0.0008):
+def draw_grasps(vis, grasps, cam_pose, gripper_openings, colors=[(0, 1., 0)], show_gripper_mesh=False, tube_radius=0.0008,material_record = None):
     """
     Draws wireframe grasps from given camera pose and with given gripper openings
 
@@ -299,7 +391,11 @@ def draw_grasps(vis, grasps, cam_pose, gripper_openings, colors=[(0, 1., 0)], sh
     # mat = o3d.visualization.rendering.MaterialRecord()
     # mat.shader = "unlitLine"
     # mat.line_width = 10
-    vis.add_geometry(line_set)
+    if material_record is not None:
+        material_record.shader = "unlitLine"
+        vis.add_geometry(str(random.randint(0,1000000)),line_set,material_record)
+    else:
+        vis.add_geometry(line_set)
     # vis.draw({
     #     'name': 'grasps',
     #     'geometry': line_set,

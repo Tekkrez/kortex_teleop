@@ -1,10 +1,5 @@
 # Custom service to request grasp poses from a given point cloud
-bool grasp_request
-geometry_msgs/Point gaze_point
+std_msgs/Float64MultiArray gaze_point
 ---
-geometry_msgs/Pose grasp_pose
-float64 grasp_score
-geometry_msgs/Point contact_point
-float64 gripper_opening
-sensor_msgs/Image grasp_visualization
 bool success
+string message

@@ -2,6 +2,7 @@
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <teleop_interfaces/srv/execute_grasp.hpp>
 #include <teleop_interfaces/srv/manipulator_waypoints.hpp>
+#include <teleop_interfaces/srv/send_transform.hpp>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 #include <thread>
@@ -27,6 +28,7 @@ class GraspExecutor : public rclcpp::Node
     rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr current_pose_sub;
     // Service
     rclcpp::Service<teleop_interfaces::srv::ExecuteGrasp>::SharedPtr grasp_execute_service;
+    rclcpp::Service<teleop_interfaces::srv::SendTransform>::SharedPtr send_transform_service;
     // Service client
     rclcpp::Client<teleop_interfaces::srv::ManipulatorWaypoints>::SharedPtr waypoint_service_client;
 
@@ -65,9 +67,13 @@ class GraspExecutor : public rclcpp::Node
         Eigen::Isometry3d grasp_pose;
         tf2::fromMsg(request->grasp_pose,grasp_pose);
         pose_vec.emplace_back(tf2::toMsg(get_offset_pose(grasp_pose)));
+        // do it twice to ensure gripper is open
+        pose_vec.emplace_back(tf2::toMsg(get_offset_pose(grasp_pose)));
         grasp_pose = head_colour_wrt_world*grasp_pose;
         pose_vec.emplace_back(tf2::toMsg(grasp_pose));
         pose_vec.emplace_back(this->current_pose);
+        // do it twice to ensure gripper is open
+        gripper_state_vec.emplace_back(true);
         gripper_state_vec.emplace_back(false);
         gripper_state_vec.emplace_back(true);
         gripper_state_vec.emplace_back(true);
@@ -88,6 +94,14 @@ class GraspExecutor : public rclcpp::Node
         response->success = true;
     }
 
+    void send_transform_callback(const std::shared_ptr<teleop_interfaces::srv::SendTransform_Request> request, const std::shared_ptr<teleop_interfaces::srv::SendTransform_Response> response)
+    {
+        response->transform = tf2::eigenToTransform(this->head_colour_wrt_world);
+        response->transform.header.stamp = this->now();
+        response->transform.header.frame_id = "world";
+        response->transform.child_frame_id = "head_camera_colour_frame";
+    }
+
     public:
 
     GraspExecutor(): Node("Grasp_Executor")
@@ -96,10 +110,9 @@ class GraspExecutor : public rclcpp::Node
         current_pose_sub = this->create_subscription<geometry_msgs::msg::Pose>("current_ee_pose",1,std::bind(&GraspExecutor::current_pose_callback,this,_1));
         grasp_execute_service = this->create_service<teleop_interfaces::srv::ExecuteGrasp>("execute_grasp",std::bind(&GraspExecutor::execute_grasp_callback,this,_1,_2));
         waypoint_service_client = this->create_client<teleop_interfaces::srv::ManipulatorWaypoints>("manipulator_waypoints");
-        //TF listener
+        // TF listener
         tf_buffer = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
-
         // Get transform
         bool transform_found = false;
         geometry_msgs::msg::TransformStamped head_colour_wrt_world_msg;
@@ -123,6 +136,8 @@ class GraspExecutor : public rclcpp::Node
             }
         }
         head_colour_wrt_world = tf2::transformToEigen(head_colour_wrt_world_msg);
+        // Register service after transform is found
+        send_transform_service = this->create_service<teleop_interfaces::srv::SendTransform>("send_transform",std::bind(&GraspExecutor::send_transform_callback,this,_1,_2));
     }
 };
 
