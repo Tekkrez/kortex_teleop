@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 import open3d as o3d
+import cv2
 
 import matplotlib.pyplot as plt
 from matplotlib import cm

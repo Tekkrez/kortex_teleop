@@ -38,6 +38,11 @@ class grasp_requester(Node):
         self.colour_msg = None
         self.camera_info_msg = None
         self.grasp_requested = False
+        # Properties for gaze point
+        self.left_gaze_point = None
+        self.left_gaze_recieved = False
+        self.right_gaze_recieved = False
+        self.right_gaze_point = None
         self.center = [600,350]
         # Subscribers
         self.cam_info_sub = self.create_subscription(CameraInfo,"/head/right_camera/color/camera_info",self.set_camera_info,1)
@@ -50,7 +55,8 @@ class grasp_requester(Node):
         self.grasp_viz_pub = self.create_publisher(PoseArray,"grasp_poses_test",1)
         
         # Service server
-        self.server = self.create_service(srv_type=GraspTrigger,srv_name='trigger_grasp',callback=self.trigger_grasp_callback)
+        self.left_eye_server = self.create_service(srv_type=GraspTrigger,srv_name='left_trigger_grasp',callback=self.left_trigger_grasp_callback)
+        self.right_eye_server = self.create_service(srv_type=GraspTrigger,srv_name='right_trigger_grasp',callback=self.right_trigger_grasp_callback)
         # Service client
         self.client = self.create_client(GraspReq,'request_grasp')
         self.execute_grasp_client = self.create_client(ExecuteGrasp,'execute_grasp')
@@ -91,16 +97,40 @@ class grasp_requester(Node):
             if difference.nanoseconds*1e-9 < self.message_slop:
                 self.run_network()
 
-    def trigger_grasp_callback(self,request: GraspTrigger.Request,response: GraspTrigger.Response):
-        left_gaze_point = np.array([request.gaze_point.data[0],1-request.gaze_point.data[1]])
-        # right_gaze_point = np.array([request.gaze_point.data[2],1-request.gaze_point.data[3]])
-        # Average the gaze points
-        # center_gaze_point = (left_gaze_point+right_gaze_point)/2
-        center_gaze_point = left_gaze_point
 
-        self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
-        print(f"Center: {self.center}")
-        self.grasp_requested = True
+    def left_trigger_grasp_callback(self,request: GraspTrigger.Request,response: GraspTrigger.Response):
+        # Callback for left gaze point
+        self.right_gaze_recieved = True
+        self.left_gaze_point = np.array([request.gaze_point.data[0],1-request.gaze_point.data[1]])
+
+        # Run network if both gaze points are recieved
+        if self.left_gaze_recieved and self.right_gaze_recieved:
+            self.left_gaze_recieved = False
+            self.right_gaze_recieved = False
+            # Average the gaze points
+            center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
+            self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
+            print(f"Center: {self.center}")
+            self.grasp_requested = True
+
+        response.success = True
+        response.message = "Grasp requested"
+        return response
+    
+    def right_trigger_grasp_callback(self,request: GraspTrigger.Request,response: GraspTrigger.Response):
+        # Callback for right gaze point
+        self.left_gaze_recieved = True
+        self.right_gaze_point = np.array([request.gaze_point.data[0],1-request.gaze_point.data[1]])
+
+        if self.left_gaze_recieved and self.right_gaze_recieved:
+            self.left_gaze_recieved = False
+            self.right_gaze_recieved = False
+            # Average the gaze points
+            center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
+            self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
+            print(f"Center: {self.center}")
+            self.grasp_requested = True
+        
         response.success = True
         response.message = "Grasp requested"
         return response

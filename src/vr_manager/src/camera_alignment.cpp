@@ -42,6 +42,7 @@ class Camera_Calibrator : public rclcpp::Node
 
         // Camera_calibration_point
         Eigen::Isometry3d calibration_pose;
+        Eigen::Isometry3d home_position_pose;
 
         void head_aruco_callback(const ros2_aruco_interfaces::msg::ArucoMarkers& msg)
         {
@@ -202,21 +203,33 @@ class Camera_Calibrator : public rclcpp::Node
 
             tf_static_braodcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
             calibration_pose.translation() << 0.4,0,0.7;
+            home_position_pose.translation() << 0.58,0,0.44;
             Eigen::Quaterniond calibration_orientation;
+            Eigen::Quaterniond home_position_orientation;
             calibration_orientation.w() = 0.05;
             calibration_orientation.vec()<<0.68,0.72,0;
             calibration_pose.linear() << calibration_orientation.normalized().toRotationMatrix();
+            home_position_orientation.w() = 0.5;
+            home_position_orientation.vec()<<0.5,0.5,0.5;
+            home_position_pose.linear() << home_position_orientation.normalized().toRotationMatrix();
             std::cout<< "Target Position: " << calibration_pose.translation() <<std::endl;
             std::cout<< "Target Orientation: " << Eigen::Quaterniond(calibration_pose.rotation())<<std::endl;
             std::vector<geometry_msgs::msg::Pose> pose_vec;
             std::vector<bool> gripper_state_vec;
             pose_vec.emplace_back(tf2::toMsg(calibration_pose));
             gripper_state_vec.emplace_back(false);
+            // Wait for camera to catch a glimpse of the aruco markers
+            pose_vec.emplace_back(tf2::toMsg(calibration_pose));
+            gripper_state_vec.emplace_back(true);
+            // Go to home position
+            pose_vec.emplace_back(tf2::toMsg(home_position_pose));
+            gripper_state_vec.emplace_back(false);
+
             auto request = std::make_shared<teleop_interfaces::srv::ManipulatorWaypoints::Request>();
             request->poses = pose_vec;
             request->gripper_state = gripper_state_vec;
 
-            while (!waypoint_service_client->wait_for_service(1s)) {
+            while (!waypoint_service_client->wait_for_service(500ms)) {
                 if (!rclcpp::ok()) {
                     RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
                     break;

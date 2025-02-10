@@ -114,6 +114,7 @@ class Grasp_Generator(Node):
         self.contact_pts[1.0] = self.contact_pts[1.0][good_pose_index]
         self.gripper_openings[1.0] = self.gripper_openings[1.0][good_pose_index]
         modified_visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=True, pc_colors=pc_colours,intrinsics=self.k_intrinsics)
+        # visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=False, pc_colors=pc_colours)
 
         # Only take the results for the segmented element
         self.pred_grasps = self.pred_grasps[1.0]
@@ -138,10 +139,10 @@ class Grasp_Generator(Node):
             unit_position = position/np.linalg.norm(position)
             unit_position[2] = 0
             angle_between = np.arccos(np.dot(z_axis,unit_position))
-            # Keep only poses that are facing away from the robot
-            if(angle_between<=np.pi/2):
+            # Keep only poses that are facing away from the robot with some margin
+            if(angle_between<=(np.pi/2+0.3)):
                 good_poses_index[i] = True
-        # Retunr back to local frame
+        # Return back to local frame
         good_poses = poses[good_poses_index]
         print(f'GOOD POSES SHAPE: {good_poses.shape}')
         return good_poses,good_poses_index
