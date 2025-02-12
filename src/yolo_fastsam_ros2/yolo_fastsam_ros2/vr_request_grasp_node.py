@@ -5,7 +5,7 @@ import rclpy.time
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseArray
-from teleop_interfaces.srv import GraspReq, ExecuteGrasp, GraspTrigger
+from teleop_interfaces.srv import GraspReq, ExecuteGrasp, GraspTrigger, VisualizeGrasp
 
 # from ultralytics import FastSAM
 from ultralytics import SAM
@@ -60,8 +60,10 @@ class grasp_requester(Node):
         # Service client
         self.client = self.create_client(GraspReq,'request_grasp')
         self.execute_grasp_client = self.create_client(ExecuteGrasp,'execute_grasp')
+        self.grasp_vis_client = self.create_client(VisualizeGrasp,'set_grasp_view')
         self.future : Future = None
         self.execute_grasp_future: Future = None
+        self.grasp_viz_future: Future = None
 
         # Import network
         self.network = SAM("sam2.1_t.pt")
@@ -183,6 +185,11 @@ class grasp_requester(Node):
         if response.success:
             print("GRASP EXECUTED")
 
+    def grasp_viz_response(self,future: Future):
+        response = future.result()
+        if response.success:
+            print("GRASP VISUALIZED")
+
     def process_response(self, future: Future):
         response = future.result()
         if response.success:
@@ -200,9 +207,15 @@ class grasp_requester(Node):
             execute_grasp_request.grasp_score = response.grasp_scores[0]
             execute_grasp_request.contact_point = response.contact_points[0]
             execute_grasp_request.gripper_opening = response.gripper_openings[0]
-            # Send request
-            self.execute_grasp_future = self.execute_grasp_client.call_async(execute_grasp_request)
-            self.future.add_done_callback(self.execute_grasp_response)
+            # Send request to visualize grasp
+            set_grasp_view_request = VisualizeGrasp.Request()
+            set_grasp_view_request.grasp_visualization = response.grasp_visualization
+            self.grasp_viz_future = self.grasp_vis_client.call_async(set_grasp_view_request)
+            self.grasp_viz_future.add_done_callback(self.grasp_viz_response)
+            # Send request to execute grasp
+            # FIXME: UNCOMMENT
+            # self.execute_grasp_future = self.execute_grasp_client.call_async(execute_grasp_request)
+            # self.future.add_done_callback(self.execute_grasp_response)
         else:
             print("NO GRASPS GENERATED")
 

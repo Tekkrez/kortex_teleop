@@ -17,6 +17,7 @@ rosidl_generate_interfaces(teleop_interfaces
   "srv/GraspTrigger.srv"
   "srv/ManipulatorWaypoints.srv"
   "srv/SendTransform.srv"
+  "srv/VisualizeGrasp.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs sensor_msgs
 )
 

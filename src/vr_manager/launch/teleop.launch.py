@@ -22,12 +22,19 @@ def generate_launch_description():
         output="screen",
         emulate_tty=True,
     )
+    camera_interceptor_node = Node(
+        name = "camera_interceptor_node",
+        package = "vr_manager",
+        executable = "camera_interceptor_node",
+        output = "screen",
+        emulate_tty = True,
+    )
     # Take controller position and generate desired position
     des_pose = IncludeLaunchDescription(PythonLaunchDescriptionSource([
         FindPackageShare("vr_manager"),'/launch/','pose_viz.launch.py']))
     # Take webcam image and publish it
     image_pub = IncludeLaunchDescription(PythonLaunchDescriptionSource([
-        FindPackageShare("image_publisher"),'/launch/','image_pub.launch.py']))
+        FindPackageShare("vr_manager"),'/launch/','camera_align.launch.py']))
     # Find required joint velocities from position error
     move_it_node = IncludeLaunchDescription(PythonLaunchDescriptionSource([
         FindPackageShare("move_it_node"),'/launch/','moveit_vel_control_node.launch.py'])) 
@@ -37,6 +44,7 @@ def generate_launch_description():
         des_pose,
         image_pub,
         move_it_node,
+        camera_interceptor_node
         # robot_node
         ]
     )

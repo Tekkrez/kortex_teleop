@@ -12,15 +12,19 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(ros2_aruco_interfaces REQUIRED)
 find_package(teleop_interfaces REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(cv_bridge REQUIRED)
 
 
 add_executable(vr_manager_node src/vr_manager_node.cpp src/vr_manager_utils.cpp)
 add_executable(camera_alignment_node src/camera_alignment.cpp src/vr_manager_utils.cpp)
 add_executable(grasp_executor_node src/execute_grasp.cpp)
+add_executable(camera_interceptor_node src/camera_interceptor.cpp)
 
 ament_target_dependencies(vr_manager_node rclcpp geometry_msgs tf2_eigen ros2_aruco_interfaces)
 ament_target_dependencies(camera_alignment_node rclcpp geometry_msgs tf2_eigen ros2_aruco_interfaces teleop_interfaces)
 ament_target_dependencies(grasp_executor_node rclcpp geometry_msgs tf2_eigen teleop_interfaces)
+ament_target_dependencies(camera_interceptor_node rclcpp teleop_interfaces sensor_msgs std_srvs cv_bridge)
 
 target_include_directories(vr_manager_node
   PUBLIC
@@ -36,6 +40,7 @@ install(
   vr_manager_node
   camera_alignment_node
   grasp_executor_node
+  camera_interceptor_node
   DESTINATION
     lib/${PROJECT_NAME}
 )

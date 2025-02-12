@@ -18,7 +18,7 @@ class GraspExecutor : public rclcpp::Node
     private:
     // Properties
     // Offset from grasp to approach from
-    double offset_distance = -0.1;
+    double offset_distance = -0.12;
     double grasp_offset_adjustment = -0.015;
     geometry_msgs::msg::Pose current_pose;
     Eigen::Isometry3d head_colour_wrt_world;

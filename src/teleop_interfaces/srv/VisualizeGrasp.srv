@@ -1,0 +1,4 @@
+sensor_msgs/Image grasp_visualization
+---
+bool success
+string message

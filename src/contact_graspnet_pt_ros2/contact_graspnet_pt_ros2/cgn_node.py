@@ -72,6 +72,7 @@ class Grasp_Generator(Node):
         self.scores = None
         self.contact_pts = None
         self.gripper_openings = None
+        self.grasp_viz = None
 
         # ROS2 Parameters
         # TODO: Fix parameters
@@ -107,13 +108,13 @@ class Grasp_Generator(Node):
         self.pred_grasps,self.scores,self.contact_pts,self.gripper_openings = self.grasp_network.predict_scene_grasps(pc_full,pc_segments=pc_segments,filter_grasps=self.filter_grasps,local_regions=self.local_regions,forward_passes=self.forward_passes)
 
         # show_image(self.rgb_image, self.segmentation_map)
-        visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=False, pc_colors=pc_colours)
+        # visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=False, pc_colors=pc_colours)
         # visualize the filtered grasps
         self.pred_grasps[1.0], good_pose_index = self.filter_grasps_by_pose(self.pred_grasps[1.0])
         self.scores[1.0] = self.scores[1.0][good_pose_index]
         self.contact_pts[1.0] = self.contact_pts[1.0][good_pose_index]
         self.gripper_openings[1.0] = self.gripper_openings[1.0][good_pose_index]
-        modified_visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=True, pc_colors=pc_colours,intrinsics=self.k_intrinsics)
+        self.grasp_viz = modified_visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=True, pc_colors=pc_colours,intrinsics=self.k_intrinsics)
         # visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=False, pc_colors=pc_colours)
 
         # Only take the results for the segmented element
@@ -178,12 +179,13 @@ class Grasp_Generator(Node):
             response.success = True
             response.grasp_scores = self.scores.tolist()
             response.gripper_openings = self.gripper_openings.tolist()
+            response.grasp_visualization = self.cv_bridge.cv2_to_imgmsg(self.grasp_viz,encoding='rgb8')
+            print(response.grasp_visualization.encoding)
             for i in range(len(self.scores)):
                 response.grasp_poses.append(pose_matrix_to_msg(self.pred_grasps[i,:,:]))
                 response.contact_points.append(point_array_to_msg(self.contact_pts[i,:]))
         else:
             response.success = False
-
         return response
 
 def main(args=None):

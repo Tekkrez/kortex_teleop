@@ -282,8 +282,7 @@ def modified_visualize_grasps(full_pc, pred_grasps_cam, scores, plot_opencv_cam=
     # View the point cloud from the camera frame aka the origin
     render.setup_camera(intrinsic_matrix = intrinsics, extrinsic_matrix = np.eye(4),intrinsic_width_px = 1280, intrinsic_height_px = 720)
     img = render.render_to_image()
-    o3d.io.write_image("test_2.png", img)
-    return
+    return np.asarray(img)
 
 
 def draw_pc_with_colors(pc, pc_colors=None, single_color=(0.3,0.3,0.3), mode='2dsquare', scale_factor=0.0018):

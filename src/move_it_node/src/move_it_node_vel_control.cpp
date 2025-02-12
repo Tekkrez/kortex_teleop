@@ -152,6 +152,7 @@ void toggle_tracking_callback(const std::shared_ptr<std_srvs::srv::SetBool_Reque
         response->success = true;
         if(tracking_enabled)
         {
+            waypoint_end_reached = true;
             response->message = "Enabled tracking";
             std::cout <<"Enabled tracking"<<std::endl;
         }
@@ -168,8 +169,8 @@ void waypoint_callback (const std::shared_ptr<teleop_interfaces::srv::Manipulato
 {
     if(request->gripper_state.size() == request->poses.size())
     {
-
-        std::cout<<"Recieved Waypoint Request"<< std::endl;
+        tracking_enabled = false;
+        std::cout<<"------- Recieved Waypoint Request -------"<< std::endl;
         waypoint_end_reached = false;
         waypoint_reached = true;
         waypoint_poses_vec = request->poses;
@@ -327,7 +328,6 @@ int main(int argc,char** argv)
                 // Starting state of "waypoint reached" is true to help with case when "waypoint pos" is at 0
                 if(waypoint_reached)
                 {
-                    std::cout<<"Inside waypoint assignment"<< std::endl;
                     std::cout<<"Current Waypoint position: " << waypoint_pos<< std::endl;
                     if(waypoint_pos==waypoint_poses_vec.size())
                     {
@@ -341,9 +341,7 @@ int main(int argc,char** argv)
                         check_gripper_vec =true;
                         target_reached = false;
 
-                        std::cout<<"New target set: " << std::endl;                   
-                        std::cout << "target Position: " << target_pose.translation() << std::endl;
-                        std::cout << "target orientation: " << Eigen::Quaterniond(target_pose.rotation()) << std::endl;
+                        std::cout<<"New target set" << std::endl;
                     }
                 }
                 if(target_reached && !waypoint_end_reached && check_gripper_vec)
@@ -410,7 +408,7 @@ int main(int argc,char** argv)
             Eigen::Vector3d omega;
 
             //Update output velocity if different enough from current pose and tracking is enabled
-            if((position_error.norm()>linear_distance_thresh || std::abs(orientation_error.angle())>angular_distance_thresh) && tracking_enabled)
+            if((position_error.norm()>linear_distance_thresh || std::abs(orientation_error.angle())>angular_distance_thresh) && (tracking_enabled || !waypoint_end_reached))
             {
                 //Assert act as a check, likely uneccesary since Eigen should take care of this when creating the angle axis object
                 assert(abs(orientation_error.angle())<=M_PI);
@@ -474,7 +472,7 @@ int main(int argc,char** argv)
                 }
             }
             else
-            {   if(tracking_enabled)
+            {   if(!waypoint_end_reached)
                 {
                     target_reached = true;   
                 }

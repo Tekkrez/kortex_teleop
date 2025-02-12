@@ -1,13 +1,33 @@
 {
     "python.autoComplete.extraPaths": [
+        "/home/tekkrez/kortex_teleop/build/yolo_fastsam_ros2",
+        "/home/tekkrez/kortex_teleop/install/yolo_fastsam_ros2/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/build/unseen_object_segmentation_ros2",
+        "/home/tekkrez/kortex_teleop/install/unseen_object_segmentation_ros2/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/install/teleop_interfaces/local/lib/python3.10/dist-packages",
+        "/home/tekkrez/kortex_teleop/install/ros_tcp_endpoint/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/install/ros2_aruco_interfaces/local/lib/python3.10/dist-packages",
+        "/home/tekkrez/kortex_teleop/install/ros2_aruco/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/install/image_publisher/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/build/contact_graspnet_pt_ros2",
+        "/home/tekkrez/kortex_teleop/install/contact_graspnet_pt_ros2/lib/python3.10/site-packages",
         "/opt/ros/humble/lib/python3.10/site-packages",
-        "/opt/ros/humble/local/lib/python3.10/dist-packages",
-        "/home/tekkrez/kortex_teleop/install/teleop_interfaces/local/lib/python3.10/dist-packages/teleop_interfaces/"
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
     ],
     "python.analysis.extraPaths": [
+        "/home/tekkrez/kortex_teleop/build/yolo_fastsam_ros2",
+        "/home/tekkrez/kortex_teleop/install/yolo_fastsam_ros2/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/build/unseen_object_segmentation_ros2",
+        "/home/tekkrez/kortex_teleop/install/unseen_object_segmentation_ros2/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/install/teleop_interfaces/local/lib/python3.10/dist-packages",
+        "/home/tekkrez/kortex_teleop/install/ros_tcp_endpoint/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/install/ros2_aruco_interfaces/local/lib/python3.10/dist-packages",
+        "/home/tekkrez/kortex_teleop/install/ros2_aruco/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/install/image_publisher/lib/python3.10/site-packages",
+        "/home/tekkrez/kortex_teleop/build/contact_graspnet_pt_ros2",
+        "/home/tekkrez/kortex_teleop/install/contact_graspnet_pt_ros2/lib/python3.10/site-packages",
         "/opt/ros/humble/lib/python3.10/site-packages",
-        "/opt/ros/humble/local/lib/python3.10/dist-packages",
-        "/home/tekkrez/kortex_teleop/install/teleop_interfaces/local/lib/python3.10/dist-packages/teleop_interfaces/"
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
     ],
     "files.associations": {
         "chrono": "cpp",
