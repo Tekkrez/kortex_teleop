@@ -17,6 +17,7 @@ class CameraInterceptor : public rclcpp::Node
         rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr head_view_service;
         sensor_msgs::msg::CompressedImage grasp_visualization;
         bool visualize_grasp = false;
+        bool ignore_next_grasp = false;
         cv_bridge::CvImagePtr cv_ptr;
 
         void camera_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
@@ -60,7 +61,15 @@ class CameraInterceptor : public rclcpp::Node
                 std::cerr << e.what() << '\n';
             }
             // Set flags
-            visualize_grasp = true;
+            if(ignore_next_grasp)
+            {
+                std::cout<< "Ignored" <<std::endl;
+                ignore_next_grasp = false;
+            }
+            else if(request->generated_grasps)
+            {
+                visualize_grasp = true;
+            }
             response->success = true;
         }
 
@@ -68,6 +77,13 @@ class CameraInterceptor : public rclcpp::Node
         {
             if(request->data)
             {
+                if(!visualize_grasp)
+                {
+                    std::cout<< "Ignoring next set of generated grasps" <<std::endl;
+                    ignore_next_grasp = true;
+                }
+
+                std::cout<< "Stop Visualizing grasps" <<std::endl;
                 visualize_grasp = false;
             }
             response->success = true;

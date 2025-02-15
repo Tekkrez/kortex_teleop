@@ -152,8 +152,6 @@ class Grasp_Generator(Node):
     def sort_results(self):
         # Find sorted indicies and keep top 20
         sorted_indicies = np.argsort(self.scores)[::-1]
-        if(len(self.scores)>20):
-            sorted_indicies = sorted_indicies[:20]
         # Apply sort
         self.scores = self.scores[sorted_indicies]
         self.pred_grasps = self.pred_grasps[sorted_indicies]

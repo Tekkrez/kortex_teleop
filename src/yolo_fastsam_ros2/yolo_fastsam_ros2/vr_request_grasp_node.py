@@ -44,6 +44,11 @@ class grasp_requester(Node):
         self.right_gaze_recieved = False
         self.right_gaze_point = None
         self.center = [600,350]
+        # Store grasp generation results
+        self.grasp_poses: PoseArray = None
+        self.grasp_scores = None
+        self.grasp_contact_points = None
+        self.gripper_openings = None
         # Subscribers
         self.cam_info_sub = self.create_subscription(CameraInfo,"/head/right_camera/color/camera_info",self.set_camera_info,1)
         self.colour_sub = self.create_subscription(Image,"/head/right_camera/color/image_raw",self.colour_callback,3)
@@ -57,6 +62,8 @@ class grasp_requester(Node):
         # Service server
         self.left_eye_server = self.create_service(srv_type=GraspTrigger,srv_name='left_trigger_grasp',callback=self.left_trigger_grasp_callback)
         self.right_eye_server = self.create_service(srv_type=GraspTrigger,srv_name='right_trigger_grasp',callback=self.right_trigger_grasp_callback)
+        self.left_eye_choose_grasp_server = self.create_service(srv_type=GraspTrigger,srv_name='left_choose_grasp',callback=self.left_choose_grasp_callback)
+        self.right_eye_choose_grasp_server = self.create_service(srv_type=GraspTrigger,srv_name='right_choose_grasp',callback=self.right_choose_grasp_callback)
         # Service client
         self.client = self.create_client(GraspReq,'request_grasp')
         self.execute_grasp_client = self.create_client(ExecuteGrasp,'execute_grasp')
@@ -67,8 +74,6 @@ class grasp_requester(Node):
 
         # Import network
         self.network = SAM("sam2.1_t.pt")
-
-
 
     def set_camera_info(self,msg: CameraInfo):
         with lock:
@@ -118,6 +123,14 @@ class grasp_requester(Node):
         response.success = True
         response.message = "Grasp requested"
         return response
+
+    def filter_grasps(self):
+        k = np.array(self.camera_info_msg.k).reshape(3, 3)
+        best_score = 0
+        for pose in self.grasp_poses:
+            # Check if the pose is near the gaze point
+            
+
     
     def right_trigger_grasp_callback(self,request: GraspTrigger.Request,response: GraspTrigger.Response):
         # Callback for right gaze point
@@ -131,10 +144,41 @@ class grasp_requester(Node):
             center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
             self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
             print(f"Center: {self.center}")
-            self.grasp_requested = True
         
         response.success = True
         response.message = "Grasp requested"
+        return response
+    
+    def left_choose_grasp_callback(self,request: GraspTrigger.Request,response: GraspTrigger.Response):
+        self.left_gaze_recieved = True
+        self.left_gaze_point = np.array([request.gaze_point.data[0],1-request.gaze_point.data[1]])
+
+        if self.left_gaze_recieved and self.right_gaze_recieved:
+            self.left_gaze_recieved = False
+            self.right_gaze_recieved = False
+            # Average the gaze points
+            center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
+            self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
+            print(f"Center: {self.center}")
+            
+        response.success = True
+        response.message = "Grasp chosen"
+        return response
+    
+    def right_choose_grasp_callback(self,request: GraspTrigger.Request,response: GraspTrigger.Response):
+        self.right_gaze_recieved = True
+        self.right_gaze_point = np.array([request.gaze_point.data[0],1-request.gaze_point.data[1]])
+
+        if self.left_gaze_recieved and self.right_gaze_recieved:
+            self.left_gaze_recieved = False
+            self.right_gaze_recieved = False
+            # Average the gaze points
+            center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
+            self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
+            print(f"Center: {self.center}")
+            self.grasp_chosen = True
+        response.success = True
+        response.message = "Grasp chosen"
         return response
 
     def run_network(self):
@@ -193,31 +237,51 @@ class grasp_requester(Node):
     def process_response(self, future: Future):
         response = future.result()
         if response.success:
-            pose_array_message = PoseArray()
-            pose_array_message.poses = response.grasp_poses
-            pose_array_message.header.frame_id = "head_camera_colour_frame"
-            pose_array_message.header.stamp = rclpy.time.Time().to_msg()
-            self.grasp_viz_pub.publish(pose_array_message)
+            # pose_array_message = PoseArray()
+            # pose_array_message.poses = response.grasp_poses
+            # pose_array_message.header.frame_id = "head_camera_colour_frame"
+            # pose_array_message.header.stamp = rclpy.time.Time().to_msg()
+            # self.grasp_viz_pub.publish(pose_array_message)
 
+            # Store the results from execulte grasp
+            self.grasp_poses = response.grasp_poses
+            self.grasp_scores = response.grasp_scores
+            self.grasp_contact_points = response.contact_points
+            self.gripper_openings = response.gripper_openings
             execute_grasp_request = ExecuteGrasp.Request()
             while not self.client.wait_for_service(timeout_sec=1.0) and rclpy.ok():
                 self.get_logger().info(f'{self.client.srv_name} service not available, waiting...')
-            # Create request
-            execute_grasp_request.grasp_pose = response.grasp_poses[0]
-            execute_grasp_request.grasp_score = response.grasp_scores[0]
-            execute_grasp_request.contact_point = response.contact_points[0]
-            execute_grasp_request.gripper_opening = response.gripper_openings[0]
-            # Send request to visualize grasp
+            
+            # Visualize grasp
             set_grasp_view_request = VisualizeGrasp.Request()
+            set_grasp_view_request.generated_grasps = True
             set_grasp_view_request.grasp_visualization = response.grasp_visualization
             self.grasp_viz_future = self.grasp_vis_client.call_async(set_grasp_view_request)
             self.grasp_viz_future.add_done_callback(self.grasp_viz_response)
-            # Send request to execute grasp
-            # FIXME: UNCOMMENT
-            # self.execute_grasp_future = self.execute_grasp_client.call_async(execute_grasp_request)
-            # self.future.add_done_callback(self.execute_grasp_response)
+            ## Create request
+            # execute_grasp_request.grasp_pose = response.grasp_poses[0]
+            # execute_grasp_request.grasp_score = response.grasp_scores[0]
+            # execute_grasp_request.contact_point = response.contact_points[0]
+            # execute_grasp_request.gripper_opening = response.gripper_openings[0]
         else:
+            set_grasp_view_request = VisualizeGrasp.Request()
+            set_grasp_view_request.generated_grasps = False
+            self.grasp_viz_future = self.grasp_vis_client.call_async(set_grasp_view_request)
+            self.grasp_viz_future.add_done_callback(self.grasp_viz_response)
             print("NO GRASPS GENERATED")
+
+    def execute_grasp(self,grasp_index):
+        execute_grasp_request = ExecuteGrasp.Request()
+        while not self.client.wait_for_service(timeout_sec=1.0) and rclpy.ok():
+            self.get_logger().info(f'{self.client.srv_name} service not available, waiting...')
+        # Create request
+        execute_grasp_request.grasp_pose = self.grasp_poses[grasp_index]
+        execute_grasp_request.grasp_score = self.grasp_scores[grasp_index]
+        execute_grasp_request.contact_point = self.grasp_contact_points[grasp_index]
+        execute_grasp_request.gripper_opening = self.gripper_openings[grasp_index]
+        # Send request to execute grasp
+        self.execute_grasp_future = self.execute_grasp_client.call_async(execute_grasp_request)
+        self.execute_grasp_future.add_done_callback(self.execute_grasp_response)
 
 
 def main(args=None):

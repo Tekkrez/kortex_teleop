@@ -6,14 +6,15 @@
         "limitSymbolsToIncludedHeaders": false
       },
       "includePath": [
-        "/home/kevin/once_again/install/gen3_control/include/**",
+        "/home/tekkrez/kortex_teleop/install/teleop_interfaces/include/**",
+        "/home/tekkrez/kortex_teleop/install/ros2_aruco_interfaces/include/**",
+        "/home/tekkrez/kortex_teleop/install/gen3_control/include/**",
         "/opt/ros/humble/include/**",
-        "/home/kevin/once_again/src/gen3_control/include/**",
-        "/usr/include/**",
-        "${workspaceFolder}/src/gen3_control/include/**",
-        "${workspaceFolder}/src/vr_manager/include/**",
-        "${workspaceFolder}/install/**",
-        "${workspaceFolder}/src/ros2_aruco/**"
+        "/home/tekkrez/kortex_teleop/src/gen3_control/include/**",
+        "/home/tekkrez/kortex_teleop/src/move_it_node/include/**",
+        "/home/tekkrez/kortex_teleop/src/ros2_kortex_vision/include/**",
+        "/home/tekkrez/kortex_teleop/src/vr_manager/include/**",
+        "/usr/include/**"
       ],
       "name": "ROS",
       "intelliSenseMode": "gcc-x64",
