@@ -19,6 +19,7 @@ class CameraInterceptor : public rclcpp::Node
         bool visualize_grasp = false;
         bool ignore_next_grasp = false;
         cv_bridge::CvImagePtr cv_ptr;
+        rclcpp::Time time_point;
 
         void camera_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
         {
@@ -60,7 +61,13 @@ class CameraInterceptor : public rclcpp::Node
             {
                 std::cerr << e.what() << '\n';
             }
+
             // Set flags
+            if(time_point + rclcpp::Duration(5,0) < this->now())
+            {
+                std::cout<< "Time out" <<std::endl;
+                ignore_next_grasp = false;
+            }
             if(ignore_next_grasp)
             {
                 std::cout<< "Ignored" <<std::endl;
@@ -81,6 +88,7 @@ class CameraInterceptor : public rclcpp::Node
                 {
                     std::cout<< "Ignoring next set of generated grasps" <<std::endl;
                     ignore_next_grasp = true;
+                    time_point = this->now();
                 }
 
                 std::cout<< "Stop Visualizing grasps" <<std::endl;
@@ -93,6 +101,7 @@ class CameraInterceptor : public rclcpp::Node
     public:
         CameraInterceptor() : Node("Camera_Interceptor")
         {
+            time_point = this->now();
             camera_sub = this->create_subscription<sensor_msgs::msg::CompressedImage>("/head/right_camera/color/image_raw/compressed",1,std::bind(&CameraInterceptor::camera_callback,this,_1));
             camera_pub = this->create_publisher<sensor_msgs::msg::CompressedImage>("vr_camera_feed",1);
             grasp_view_service = this->create_service<teleop_interfaces::srv::VisualizeGrasp>("set_grasp_view",std::bind(&CameraInterceptor::grasp_view_callback,this,_1,_2));

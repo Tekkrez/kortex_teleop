@@ -49,6 +49,9 @@ class grasp_requester(Node):
         self.grasp_scores = None
         self.grasp_contact_points = None
         self.gripper_openings = None
+        # Grasp filter param
+        self.grasps_generated = False
+        self.max_distance_from_gaze = 0.04
         # Subscribers
         self.cam_info_sub = self.create_subscription(CameraInfo,"/head/right_camera/color/camera_info",self.set_camera_info,1)
         self.colour_sub = self.create_subscription(Image,"/head/right_camera/color/image_raw",self.colour_callback,3)
@@ -102,8 +105,30 @@ class grasp_requester(Node):
         if(self.depth_time is not None):
             difference = self.rgb_time-self.depth_time
             if difference.nanoseconds*1e-9 < self.message_slop:
-                self.run_network()
+                self.run_network()    
 
+    def filter_grasps(self):
+        k = np.array(self.camera_info_msg.k).reshape(3, 3)
+        best_score = 0
+        best_grasp_index = None
+        x_gaze = (self.center[0]-k[0,2])/k[0,0]
+        y_gaze = (self.center[1]-k[1,2])/k[1,1]
+        center_gaze_unit_vector = np.array([x_gaze,y_gaze,1])
+        center_gaze_unit_vector = center_gaze_unit_vector/np.linalg.norm(center_gaze_unit_vector)
+        for i in range(len(self.grasp_poses)):
+            pose = self.grasp_poses[i]
+            # Check if the pose position is near the gaze point
+            pose_unit_vector = np.array([pose.position.x,pose.position.y,pose.position.z])
+            pose_unit_vector = pose_unit_vector/np.linalg.norm(pose_unit_vector)       
+            # Find angle between the pose and the gaze point
+            angle_between = np.arccos(np.dot(center_gaze_unit_vector,pose_unit_vector))
+            self.get_logger().info(f"Angle between: {angle_between}")
+            d = np.linalg.norm(np.array([pose.position.x,pose.position.y,pose.position.z]))*np.sin(angle_between)
+            # TODO: Only need to check the first grasp that fits, already sorted by score
+            if d<self.max_distance_from_gaze and self.grasp_scores[i]>best_score:
+                best_score = self.grasp_scores[i]
+                best_grasp_index = i
+        return best_grasp_index
 
     def left_trigger_grasp_callback(self,request: GraspTrigger.Request,response: GraspTrigger.Response):
         # Callback for left gaze point
@@ -119,18 +144,10 @@ class grasp_requester(Node):
             self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
             print(f"Center: {self.center}")
             self.grasp_requested = True
-
+            
         response.success = True
         response.message = "Grasp requested"
         return response
-
-    def filter_grasps(self):
-        k = np.array(self.camera_info_msg.k).reshape(3, 3)
-        best_score = 0
-        for pose in self.grasp_poses:
-            # Check if the pose is near the gaze point
-            
-
     
     def right_trigger_grasp_callback(self,request: GraspTrigger.Request,response: GraspTrigger.Response):
         # Callback for right gaze point
@@ -144,6 +161,7 @@ class grasp_requester(Node):
             center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
             self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
             print(f"Center: {self.center}")
+            self.grasp_requested = True
         
         response.success = True
         response.message = "Grasp requested"
@@ -153,14 +171,20 @@ class grasp_requester(Node):
         self.left_gaze_recieved = True
         self.left_gaze_point = np.array([request.gaze_point.data[0],1-request.gaze_point.data[1]])
 
-        if self.left_gaze_recieved and self.right_gaze_recieved:
+        if self.left_gaze_recieved and self.right_gaze_recieved and self.grasps_generated:
             self.left_gaze_recieved = False
             self.right_gaze_recieved = False
             # Average the gaze points
             center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
             self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
             print(f"Center: {self.center}")
-            
+            best_fit_grasp_index = self.filter_grasps()
+            # Execute grasp based on gaze,. If there are no gazes at target location, execute grasp with the highest confidence score
+            if best_fit_grasp_index is not None:
+                self.execute_grasp(best_fit_grasp_index)
+            else:
+                self.execute_grasp(0)
+
         response.success = True
         response.message = "Grasp chosen"
         return response
@@ -169,14 +193,20 @@ class grasp_requester(Node):
         self.right_gaze_recieved = True
         self.right_gaze_point = np.array([request.gaze_point.data[0],1-request.gaze_point.data[1]])
 
-        if self.left_gaze_recieved and self.right_gaze_recieved:
+        if self.left_gaze_recieved and self.right_gaze_recieved and self.grasps_generated:
             self.left_gaze_recieved = False
             self.right_gaze_recieved = False
             # Average the gaze points
             center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
             self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
             print(f"Center: {self.center}")
-            self.grasp_chosen = True
+            best_fit_grasp_index = self.filter_grasps()
+            # Execute grasp based on gaze,. If there are no gazes at target location, execute grasp with the highest confidence score
+            if best_fit_grasp_index is not None:
+                self.execute_grasp(best_fit_grasp_index)
+            else:
+                self.execute_grasp(0)
+        
         response.success = True
         response.message = "Grasp chosen"
         return response
@@ -186,6 +216,7 @@ class grasp_requester(Node):
         if self.grasp_requested:
             # Reset flag
             self.grasp_requested = False
+            self.grasps_generated = False
             # Segment image based on gaze point
             results = self.network(self.image,points = [self.center],conf=0.2,verbose=False)
             result: Results =  results[0]
@@ -244,13 +275,14 @@ class grasp_requester(Node):
             # self.grasp_viz_pub.publish(pose_array_message)
 
             # Store the results from execulte grasp
+            self.grasps_generated = True
             self.grasp_poses = response.grasp_poses
             self.grasp_scores = response.grasp_scores
             self.grasp_contact_points = response.contact_points
             self.gripper_openings = response.gripper_openings
-            execute_grasp_request = ExecuteGrasp.Request()
-            while not self.client.wait_for_service(timeout_sec=1.0) and rclpy.ok():
-                self.get_logger().info(f'{self.client.srv_name} service not available, waiting...')
+            # execute_grasp_request = ExecuteGrasp.Request()
+            # while not self.client.wait_for_service(timeout_sec=1.0) and rclpy.ok():
+            #     self.get_logger().info(f'{self.client.srv_name} service not available, waiting...')
             
             # Visualize grasp
             set_grasp_view_request = VisualizeGrasp.Request()

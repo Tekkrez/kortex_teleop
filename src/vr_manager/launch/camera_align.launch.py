@@ -55,7 +55,7 @@ def generate_launch_description():
         namespace="head",
         package="tf2_ros",
         executable="static_transform_publisher",
-        name="depth_camera_tf_pub",
+        name="depth_camera_tf_pub_2",
         output="screen",
         arguments=["--x", "0","--y", "0","--z", "0",
                    "--qx", "0","--qy", "0","--qz", "0","--qw", "1",
