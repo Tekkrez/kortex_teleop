@@ -163,7 +163,7 @@ int main(int argc, char** argv)
       if(!gen3_robot.sendPosition(tracked_pos))
       {
         std::cout<<"Send velocity error!!"<< std::endl;
-        break;
+        // break;
       }
     }
     else if(!grip_target_reached)
