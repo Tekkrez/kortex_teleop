@@ -15,10 +15,11 @@ class CameraInterceptor : public rclcpp::Node
         rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr camera_pub;
         rclcpp::Service<teleop_interfaces::srv::VisualizeGrasp>::SharedPtr grasp_view_service;
         rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr head_view_service;
+        rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr loading_ui_service;
         sensor_msgs::msg::CompressedImage grasp_visualization;
         bool visualize_grasp = false;
         bool ignore_next_grasp = false;
-        cv_bridge::CvImagePtr cv_ptr;
+        bool loading_grasp = false;
         rclcpp::Time time_point;
 
         void camera_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
@@ -29,12 +30,32 @@ class CameraInterceptor : public rclcpp::Node
             }
             else
             {
-                camera_pub->publish(*msg);
+                if(loading_grasp)
+                {
+                    cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(*msg);
+                    cv::putText(cv_ptr->image,"Loading Grasp",cv::Point(10,150),cv::FONT_HERSHEY_COMPLEX,3,cv::Scalar(0,0,255),3,cv::LINE_4);
+                    std::vector<uchar> compressed_image_data;
+                    // cv::cvtColor(cv_ptr->image,cv_ptr->image,cv::COLOR_BGR2RGB);
+                    cv::imencode(".jpg",cv_ptr->image,compressed_image_data);
+                    sensor_msgs::msg::CompressedImage loading_im;
+                    loading_im.header = msg->header;
+                    loading_im.format = "jpeg";
+                    loading_im.data = compressed_image_data;
+                    camera_pub->publish(loading_im);
+                }
+                else
+                {
+                    camera_pub->publish(*msg);
+                }
             }
         }
 
         void grasp_view_callback(const std::shared_ptr<teleop_interfaces::srv::VisualizeGrasp::Request> request, const std::shared_ptr<teleop_interfaces::srv::VisualizeGrasp::Response> response)
         {
+            if(loading_grasp)
+            {
+                loading_grasp = false;
+            }
             // Convert image to compressed format
             try
             {   std::cout<<"Visualizing Grasp"<<std::endl;
@@ -88,6 +109,7 @@ class CameraInterceptor : public rclcpp::Node
                 {
                     std::cout<< "Ignoring next set of generated grasps" <<std::endl;
                     ignore_next_grasp = true;
+                    loading_grasp = false;
                     time_point = this->now();
                 }
 
@@ -97,6 +119,19 @@ class CameraInterceptor : public rclcpp::Node
             response->success = true;
         }
 
+        void loading_ui_callback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request, const std::shared_ptr<std_srvs::srv::SetBool::Response> response)
+        {
+            if(request->data)
+            {
+                loading_grasp = true;
+            }
+            else
+            {
+                loading_grasp = false;
+            }
+            response->success = true;
+            std::cout<< "Loading UI: " << loading_grasp <<std::endl;
+        }
 
     public:
         CameraInterceptor() : Node("Camera_Interceptor")
@@ -106,6 +141,7 @@ class CameraInterceptor : public rclcpp::Node
             camera_pub = this->create_publisher<sensor_msgs::msg::CompressedImage>("vr_camera_feed",1);
             grasp_view_service = this->create_service<teleop_interfaces::srv::VisualizeGrasp>("set_grasp_view",std::bind(&CameraInterceptor::grasp_view_callback,this,_1,_2));
             head_view_service = this->create_service<std_srvs::srv::SetBool>("set_head_view",std::bind(&CameraInterceptor::head_view_callback,this,_1,_2));
+            loading_ui_service = this->create_service<std_srvs::srv::SetBool>("set_loading_ui",std::bind(&CameraInterceptor::loading_ui_callback,this,_1,_2));
         }
 };
 

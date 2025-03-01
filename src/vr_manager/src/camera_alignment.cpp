@@ -41,6 +41,7 @@ class Camera_Calibrator : public rclcpp::Node
         rclcpp::Client<teleop_interfaces::srv::ManipulatorWaypoints>::SharedPtr waypoint_service_client;
 
         // Camera_calibration_point
+        Eigen::Isometry3d waypoint_pose;
         Eigen::Isometry3d calibration_pose;
         Eigen::Isometry3d home_position_pose;
 
@@ -92,6 +93,10 @@ class Camera_Calibrator : public rclcpp::Node
             std::sort(head_markers_sorted.begin(),head_markers_sorted.end());
             std::vector<long> common_marker_ids;
             std::set_intersection(arm_markers_sorted.begin(),arm_markers_sorted.end(),head_markers_sorted.begin(),head_markers_sorted.end(),std::back_inserter(common_marker_ids));
+            if(common_marker_ids.size()<6)
+            {
+                return;
+            }
             std::cout<< " Common marker IDs : ";
             for(auto id : common_marker_ids)
             {
@@ -202,12 +207,17 @@ class Camera_Calibrator : public rclcpp::Node
             waypoint_service_client = this->create_client<teleop_interfaces::srv::ManipulatorWaypoints>("manipulator_waypoints");
 
             tf_static_braodcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
-            calibration_pose.translation() << 0.4,0,0.7;
+            waypoint_pose.translation() << 0.42,0,0.35;;
+            calibration_pose.translation() << 0.42,-0.15,0.35;
             home_position_pose.translation() << 0.58,0,0.44;
+            Eigen::Quaterniond waypoint_orientation;
             Eigen::Quaterniond calibration_orientation;
             Eigen::Quaterniond home_position_orientation;
-            calibration_orientation.w() = 0.05;
-            calibration_orientation.vec()<<0.68,0.72,0;
+            waypoint_orientation.w() = 0.109;
+            waypoint_orientation.vec()<< 0.675,0.72,0.114;
+            waypoint_pose.linear() << waypoint_orientation.normalized().toRotationMatrix();
+            calibration_orientation.w() = 0.109;
+            calibration_orientation.vec()<< 0.675,0.72,0.114;
             calibration_pose.linear() << calibration_orientation.normalized().toRotationMatrix();
             home_position_orientation.w() = 0.5;
             home_position_orientation.vec()<<0.5,0.5,0.5;
@@ -216,11 +226,13 @@ class Camera_Calibrator : public rclcpp::Node
             std::cout<< "Target Orientation: " << Eigen::Quaterniond(calibration_pose.rotation())<<std::endl;
             std::vector<geometry_msgs::msg::Pose> pose_vec;
             std::vector<bool> gripper_state_vec;
+            pose_vec.emplace_back(tf2::toMsg(waypoint_pose));
+            gripper_state_vec.emplace_back(false);
             pose_vec.emplace_back(tf2::toMsg(calibration_pose));
             gripper_state_vec.emplace_back(false);
-            // Wait for camera to catch a glimpse of the aruco markers
-            pose_vec.emplace_back(tf2::toMsg(calibration_pose));
-            gripper_state_vec.emplace_back(true);
+            // // Wait for camera to catch a glimpse of the aruco markers
+            // pose_vec.emplace_back(tf2::toMsg(calibration_pose));
+            // gripper_state_vec.emplace_back(true);
             // Go to home position
             pose_vec.emplace_back(tf2::toMsg(home_position_pose));
             gripper_state_vec.emplace_back(false);

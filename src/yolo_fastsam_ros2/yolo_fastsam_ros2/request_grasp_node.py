@@ -58,14 +58,6 @@ class grasp_requester(Node):
         self.future : Future = None
         self.execute_grasp_future: Future = None
 
-        # Import network
-        # self.network = FastSAM("FastSAM-x.pt")
-        # Import network
-        self.network = SAM("sam2.1_t.pt")
-
-        #         from ultralytics import SAM
-
-
     def set_camera_info(self,msg: CameraInfo):
         with lock:
             self.camera_info_msg = msg

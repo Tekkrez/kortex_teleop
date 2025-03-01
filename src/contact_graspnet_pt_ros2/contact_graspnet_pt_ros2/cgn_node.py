@@ -113,7 +113,7 @@ class Grasp_Generator(Node):
         self.pred_grasps[1.0], good_pose_index = self.filter_grasps_by_pose(self.pred_grasps[1.0])
         self.scores[1.0] = self.scores[1.0][good_pose_index]
         self.contact_pts[1.0] = self.contact_pts[1.0][good_pose_index]
-        self.gripper_openings[1.0] = self.gripper_openings[1.0][good_pose_index]
+        # self.gripper_openings[1.0] = self.gripper_openings[1.0][good_pose_index]
         self.grasp_viz = modified_visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=True, pc_colors=pc_colours,intrinsics=self.k_intrinsics)
         # visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=False, pc_colors=pc_colours)
 

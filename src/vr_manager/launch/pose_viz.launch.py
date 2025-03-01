@@ -4,6 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
 
+    vr_manager_config = (get_package_share_directory("vr_manager") + "/config/vr_manager_config.yaml")
 
     vr_manager_node = Node(
         name="vr_manager_node",
@@ -11,6 +12,7 @@ def generate_launch_description():
         executable="vr_manager_node",
         output="screen",
         emulate_tty=True,
+        parameters=[vr_manager_config]
     )    
 
     rviz_config_file = (

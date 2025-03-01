@@ -84,8 +84,19 @@ class VRManager : public rclcpp::Node
             Eigen::Vector3d desired_position;
             desired_position = pos_filter.applyFilterTimeScaled(right_rel_pose.translation(),time_delta);
             desired_position = desired_position*robot_arm_length/user_arm_length+ee_pos_adjustment;
-            right_rel_pose_stamped.pose.position = tf2::toMsg(desired_position);
-            right_rel_pose_stamped.pose.orientation = tf2::toMsg(right_rel_quaternion);
+            // Ensure that the desired position is within the robot's reach (1.75 is much more than the robot's reach, but a plausible number)
+            if(desired_position.norm()<1.75)
+                {
+                right_rel_pose_stamped.pose.position = tf2::toMsg(desired_position);
+                right_rel_pose_stamped.pose.orientation = tf2::toMsg(right_rel_quaternion);
+                right_rel_pose_pub->publish(right_rel_pose_stamped);
+            }
+            else
+            {
+                RCLCPP_WARN(this->get_logger(),"Desired position is out of reach");
+                std::cout << "Desired posiion" << desired_position << std::endl;
+                std::cout << "Norm" << desired_position.norm() << std::endl;
+            }
             auto right_shoulder_pose_stamped = geometry_msgs::msg::PoseStamped();
             right_shoulder_pose_stamped.header.stamp = this->now();
             right_shoulder_pose_stamped.header.frame_id = "vr_world";
@@ -103,7 +114,6 @@ class VRManager : public rclcpp::Node
 
             hmd_pose_pub->publish(hmd_pose_stamped);
             right_pose_pub->publish(right_pose_stamped);
-            right_rel_pose_pub->publish(right_rel_pose_stamped);
             right_shoulder_pose_pub->publish(right_shoulder_pose_stamped);
             delta_time_pub->publish(delta_time_msg);
         }
@@ -115,23 +125,29 @@ class VRManager : public rclcpp::Node
             // Pose Subscriber
             rclcpp::QoS sub_qos(rclcpp::KeepLast(1),rmw_qos_profile_sensor_data);
             VR_pose_sub = this->create_subscription<geometry_msgs::msg::PoseArray>("vr_pose",sub_qos,std::bind(&VRManager::VRPose_callback,this,_1));
-            //Pose Publisher
+            // Pose Publisher
             hmd_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("hmd_pose",5);
             right_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("right_pose",5);
             right_rel_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("desired_pose",5);
             right_shoulder_pose_pub = this->create_publisher<geometry_msgs::msg::PoseStamped>("right_shoulder_pose",5);
             delta_time_pub = this->create_publisher<std_msgs::msg::Float64>("delta_time",5);
-
+            // Parameters
+            this->declare_parameter("shoulder_adjust_x",-0.1);
+            this->declare_parameter("shoulder_adjust_y",-0.07);
+            this->declare_parameter("shoulder_adjust_z",-0.20);
+            this->declare_parameter("ee_height_adjust",0.28);
+            this->declare_parameter("user_arm_length",0.65);
+            this->declare_parameter("robot_arm_length",0.95);
             //Shoulder adjust
-            shoulder_adjust <<-0.1,-0.07,-0.20;
+            shoulder_adjust << this->get_parameter("shoulder_adjust_x").as_double(),this->get_parameter("shoulder_adjust_y").as_double(),this->get_parameter("shoulder_adjust_z").as_double();
             //Adjust orientation so that end effector frame on the URDF is more naturally aligned with controller pose
             ee_rot_adjustment.vec() << 0.5,0.5,0.5;
             ee_rot_adjustment.w() = 0.5;
             //Raise by 0.28 to align shoulder with robot shoulder
-            ee_pos_adjustment << 0,0,0.28;
-            user_arm_length = 0.65;
+            ee_pos_adjustment << 0,0,this->get_parameter("ee_height_adjust").as_double();
+            user_arm_length = this->get_parameter("user_arm_length").as_double();
             //bit shoter that actual
-            robot_arm_length = 0.95;
+            robot_arm_length = this->get_parameter("robot_arm_length").as_double();
         }   
 };
 int main(int argc,char** argv)

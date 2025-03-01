@@ -6,7 +6,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseArray
 from teleop_interfaces.srv import GraspReq, ExecuteGrasp, GraspTrigger, VisualizeGrasp
-
+from std_srvs.srv import SetBool
 # from ultralytics import FastSAM
 from ultralytics import SAM
 from ultralytics.engine.results import Results
@@ -71,9 +71,11 @@ class grasp_requester(Node):
         self.client = self.create_client(GraspReq,'request_grasp')
         self.execute_grasp_client = self.create_client(ExecuteGrasp,'execute_grasp')
         self.grasp_vis_client = self.create_client(VisualizeGrasp,'set_grasp_view')
+        self.loading_grasp_ui_client = self.create_client(SetBool,'set_loading_ui')
         self.future : Future = None
         self.execute_grasp_future: Future = None
         self.grasp_viz_future: Future = None
+        self.loading_ui_future: Future = None
 
         # Import network
         self.network = SAM("sam2.1_t.pt")
@@ -124,6 +126,7 @@ class grasp_requester(Node):
             angle_between = np.arccos(np.dot(center_gaze_unit_vector,pose_unit_vector))
             self.get_logger().info(f"Angle between: {angle_between}")
             d = np.linalg.norm(np.array([pose.position.x,pose.position.y,pose.position.z]))*np.sin(angle_between)
+            print(f"Distance from gaze: {d}")
             # TODO: Only need to check the first grasp that fits, already sorted by score
             if d<self.max_distance_from_gaze and self.grasp_scores[i]>best_score:
                 best_score = self.grasp_scores[i]
@@ -137,6 +140,12 @@ class grasp_requester(Node):
 
         # Run network if both gaze points are recieved
         if self.left_gaze_recieved and self.right_gaze_recieved:
+            # Call service to show loading ui
+            loading_grasp_ui_request = SetBool.Request()
+            loading_grasp_ui_request.data = True
+            self.loading_ui_future = self.loading_grasp_ui_client.call_async(loading_grasp_ui_request)
+            print("Loading UI")
+            # Reset flags
             self.left_gaze_recieved = False
             self.right_gaze_recieved = False
             # Average the gaze points
@@ -155,6 +164,12 @@ class grasp_requester(Node):
         self.right_gaze_point = np.array([request.gaze_point.data[0],1-request.gaze_point.data[1]])
 
         if self.left_gaze_recieved and self.right_gaze_recieved:
+            # Call service to show loading ui
+            loading_grasp_ui_request = SetBool.Request()
+            loading_grasp_ui_request.data = True
+            self.loading_ui_future = self.loading_grasp_ui_client.call_async(loading_grasp_ui_request)
+            print("Loading UI")
+            # Reset flags
             self.left_gaze_recieved = False
             self.right_gaze_recieved = False
             # Average the gaze points
@@ -279,7 +294,7 @@ class grasp_requester(Node):
             self.grasp_poses = response.grasp_poses
             self.grasp_scores = response.grasp_scores
             self.grasp_contact_points = response.contact_points
-            self.gripper_openings = response.gripper_openings
+            # self.gripper_openings = response.gripper_openings
             # execute_grasp_request = ExecuteGrasp.Request()
             # while not self.client.wait_for_service(timeout_sec=1.0) and rclpy.ok():
             #     self.get_logger().info(f'{self.client.srv_name} service not available, waiting...')
@@ -310,7 +325,7 @@ class grasp_requester(Node):
         execute_grasp_request.grasp_pose = self.grasp_poses[grasp_index]
         execute_grasp_request.grasp_score = self.grasp_scores[grasp_index]
         execute_grasp_request.contact_point = self.grasp_contact_points[grasp_index]
-        execute_grasp_request.gripper_opening = self.gripper_openings[grasp_index]
+        # execute_grasp_request.gripper_opening = self.gripper_openings[grasp_index]
         # Send request to execute grasp
         self.execute_grasp_future = self.execute_grasp_client.call_async(execute_grasp_request)
         self.execute_grasp_future.add_done_callback(self.execute_grasp_response)
