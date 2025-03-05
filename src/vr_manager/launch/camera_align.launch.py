@@ -12,6 +12,8 @@ def generate_launch_description():
     #     'config',
     #     'camera_align_config.yaml')
     # Launch tcp server to communicate with Unity node
+
+
     right_camera = Node(
         namespace="head",
         name="right_camera",
@@ -29,7 +31,10 @@ def generate_launch_description():
             {"enable_infra1": False},
             {"enable_infra2": False},
             {"base_frame_id": "head_camera"},
-            {"publish_tf": False}]
+            {"publish_tf": False},
+            {"qos_overrides./parameter_events.publisher.reliability": "best_effort"},
+            {"qos_overrides./parameter_events.publisher.depth": 1}
+            ]
     )
     tf2_static_publisher_node_1 = Node(
         namespace="head",

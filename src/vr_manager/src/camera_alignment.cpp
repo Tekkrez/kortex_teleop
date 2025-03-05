@@ -207,8 +207,8 @@ class Camera_Calibrator : public rclcpp::Node
             waypoint_service_client = this->create_client<teleop_interfaces::srv::ManipulatorWaypoints>("manipulator_waypoints");
 
             tf_static_braodcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
-            waypoint_pose.translation() << 0.42,0,0.35;;
-            calibration_pose.translation() << 0.42,-0.15,0.35;
+            waypoint_pose.translation() << 0.47,0,0.40;;
+            calibration_pose.translation() << 0.47,-0.15,0.40;
             home_position_pose.translation() << 0.58,0,0.44;
             Eigen::Quaterniond waypoint_orientation;
             Eigen::Quaterniond calibration_orientation;

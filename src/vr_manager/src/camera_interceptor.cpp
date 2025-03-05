@@ -33,7 +33,7 @@ class CameraInterceptor : public rclcpp::Node
                 if(loading_grasp)
                 {
                     cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(*msg);
-                    cv::putText(cv_ptr->image,"Loading Grasp",cv::Point(10,150),cv::FONT_HERSHEY_COMPLEX,3,cv::Scalar(0,0,255),3,cv::LINE_4);
+                    cv::putText(cv_ptr->image,"Loading Grasp",cv::Point(160,150),cv::FONT_HERSHEY_COMPLEX,3,cv::Scalar(0,0,255),3,cv::LINE_4);
                     std::vector<uchar> compressed_image_data;
                     // cv::cvtColor(cv_ptr->image,cv_ptr->image,cv::COLOR_BGR2RGB);
                     cv::imencode(".jpg",cv_ptr->image,compressed_image_data);

@@ -51,7 +51,7 @@ class grasp_requester(Node):
         self.gripper_openings = None
         # Grasp filter param
         self.grasps_generated = False
-        self.max_distance_from_gaze = 0.04
+        self.max_distance_from_gaze = 0.06
         # Subscribers
         self.cam_info_sub = self.create_subscription(CameraInfo,"/head/right_camera/color/camera_info",self.set_camera_info,1)
         self.colour_sub = self.create_subscription(Image,"/head/right_camera/color/image_raw",self.colour_callback,3)
@@ -78,7 +78,7 @@ class grasp_requester(Node):
         self.loading_ui_future: Future = None
 
         # Import network
-        self.network = SAM("sam2.1_t.pt")
+        self.network = SAM("sam2.1_s.pt")
 
     def set_camera_info(self,msg: CameraInfo):
         with lock:

@@ -66,7 +66,7 @@ class Grasp_Generator(Node):
         self.local_regions = True
         self.filter_grasps = True
         self.skip_border_objects = False
-        self.forward_passes = 1
+        self.forward_passes = 2
         # Results
         self.pred_grasps = None
         self.scores = None

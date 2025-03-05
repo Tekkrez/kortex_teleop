@@ -20,6 +20,7 @@ class GraspExecutor : public rclcpp::Node
     // Offset from grasp to approach from
     double offset_distance = -0.12;
     double grasp_offset_adjustment = -0.015;
+    Eigen::Vector3d offset_vector = Eigen::Vector3d(0.02,-0.02,0);
     geometry_msgs::msg::Pose current_pose;
     Eigen::Isometry3d head_colour_wrt_world;
     // TF
@@ -47,7 +48,7 @@ class GraspExecutor : public rclcpp::Node
         }
     }
 
-    Eigen::Isometry3d get_offset_pose(const Eigen::Isometry3d& target_pose, float offset_distance = 0)
+    Eigen::Isometry3d get_offset_pose(const Eigen::Isometry3d& target_pose, float offset_distance = 0, Eigen::Vector3d global_offset = Eigen::Vector3d::Zero())
     {
         Eigen::Isometry3d offset_pose = target_pose;
         // Apply the offset in the local z direction wrt camera_frame
@@ -55,6 +56,7 @@ class GraspExecutor : public rclcpp::Node
         offset_pose.translation() += local_offset;
         // Transform to global frame
         offset_pose = this->head_colour_wrt_world*offset_pose;
+        offset_pose.translation() += global_offset;
 
         return offset_pose;
     }
@@ -67,9 +69,9 @@ class GraspExecutor : public rclcpp::Node
         // Add points
         Eigen::Isometry3d grasp_pose;
         tf2::fromMsg(request->grasp_pose,grasp_pose);
-        pose_vec.emplace_back(tf2::toMsg(get_offset_pose(grasp_pose,this->offset_distance)));
+        pose_vec.emplace_back(tf2::toMsg(get_offset_pose(grasp_pose,this->offset_distance,this->offset_vector)));
         // do it twice to ensure gripper is open
-        pose_vec.emplace_back(tf2::toMsg(get_offset_pose(grasp_pose,this->offset_distance)));
+        pose_vec.emplace_back(tf2::toMsg(get_offset_pose(grasp_pose,this->offset_distance,this->offset_vector)));
         grasp_pose = get_offset_pose(grasp_pose,this->grasp_offset_adjustment);
         // grasp_pose = head_colour_wrt_world*grasp_pose;
         pose_vec.emplace_back(tf2::toMsg(grasp_pose));
