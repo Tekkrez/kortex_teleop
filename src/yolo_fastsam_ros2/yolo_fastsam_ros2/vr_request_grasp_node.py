@@ -45,6 +45,7 @@ class grasp_requester(Node):
         self.right_gaze_point = None
         self.center = [600,350]
         # Store grasp generation results
+        self.grasp_requested_time = None
         self.grasp_poses: PoseArray = None
         self.grasp_scores = None
         self.grasp_contact_points = None
@@ -148,6 +149,8 @@ class grasp_requester(Node):
             # Reset flags
             self.left_gaze_recieved = False
             self.right_gaze_recieved = False
+            self.grasp_requested_time = rclpy.time.Time()
+            print("Grasp: requested now: ",rclpy.time.Time())
             # Average the gaze points
             center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
             self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
@@ -172,6 +175,9 @@ class grasp_requester(Node):
             # Reset flags
             self.left_gaze_recieved = False
             self.right_gaze_recieved = False
+            self.grasp_requested_time = rclpy.time.Time()
+            # Print time when the request took place
+            print("Grasp: requested now: ",rclpy.time.Time())
             # Average the gaze points
             center_gaze_point = (self.left_gaze_point+self.right_gaze_point)/2
             self.center = np.array([np.round(self.camera_info_msg.width*center_gaze_point[0]),np.round(self.camera_info_msg.height*center_gaze_point[1])],dtype=int).tolist()
@@ -242,7 +248,7 @@ class grasp_requester(Node):
             # Visualize and send the segmented image
             segmented_image = cv2.addWeighted(self.image,0.7,masked_img,0.3,0)
             segmented_image = cv2.circle(segmented_image,center=tuple(self.center),radius=10,color=(0,255,0),thickness=2)
-            # TODO:
+            segmented_image = cv2.cvtColor(segmented_image,cv2.COLOR_BGR2RGB)
             cv2.imwrite("segmented_image.jpg",segmented_image)
             segmented_image_msg = self.cv_bridge.cv2_to_imgmsg(segmented_image,'rgb8')
             segmented_image_msg.header.stamp = self.rgb_framestamp
@@ -303,6 +309,9 @@ class grasp_requester(Node):
             set_grasp_view_request = VisualizeGrasp.Request()
             set_grasp_view_request.generated_grasps = True
             set_grasp_view_request.grasp_visualization = response.grasp_visualization
+            # print time to process resonse
+            print("Time after response: ",rclpy.time.Time())
+            print(f"Time to process response: {rclpy.time.Time()-self.grasp_requested_time}")
             self.grasp_viz_future = self.grasp_vis_client.call_async(set_grasp_view_request)
             self.grasp_viz_future.add_done_callback(self.grasp_viz_response)
             ## Create request

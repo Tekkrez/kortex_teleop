@@ -4,5 +4,5 @@
     shoulder_adjust_y: -0.07
     shoulder_adjust_z: -0.20
     ee_height_adjust: 0.45
-    user_arm_length: 0.62
+    user_arm_length: 0.64
     robot_arm_length: 0.95

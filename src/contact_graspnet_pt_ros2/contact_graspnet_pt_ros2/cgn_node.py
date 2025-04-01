@@ -115,6 +115,9 @@ class Grasp_Generator(Node):
         self.contact_pts[1.0] = self.contact_pts[1.0][good_pose_index]
         # self.gripper_openings[1.0] = self.gripper_openings[1.0][good_pose_index]
         self.grasp_viz = modified_visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=True, pc_colors=pc_colours,intrinsics=self.k_intrinsics)
+        temp = self.grasp_viz.copy()
+        temp = cv2.cvtColor(temp,cv2.COLOR_BGR2RGB)
+        cv2.imwrite('grasp_vizualization.png',temp)
         # visualize_grasps(pc_full, self.pred_grasps, self.scores, plot_opencv_cam=False, pc_colors=pc_colours)
 
         # Only take the results for the segmented element
